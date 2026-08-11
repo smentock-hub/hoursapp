@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Shift Log</title>
+
+<meta name="theme-color" content="#F3EFEA">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Shift Log">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+
+<style>
+:root {
+  --bg: #F3EFEA;
+  --card: #FFFFFF;
+  --ink: #453F49;
+  --ink-soft: #948C97;
+  --line: #E7E1DA;
+
+  --clinic:  #6D8CA3;
+  --lunch:   #87A08A;
+  --notes:   #B98298;
+  --inbox:   #9689AE;
+  --forms:   #BFA476;
+  --meeting: #8A7391;
+
+  --radius: 20px;
+  --shadow: 0 1px 2px rgba(69, 63, 73, .04), 0 6px 18px rgba(69, 63, 73, .05);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+body {
+  padding: 0 16px calc(40px + env(safe-area-inset-bottom));
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+
+/* ---------- header ---------- */
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(18px + env(safe-area-inset-top)) 4px 14px;
+}
+header .titles { flex: 1; min-width: 0; }
+h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.today {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.gear {
+  width: 42px; height: 42px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  flex: none;
+  transition: transform .15s ease;
+}
+.gear:active { transform: scale(.92); }
+.gear svg { width: 20px; height: 20px; display: block; }
+
+/* ---------- active banner ---------- */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+.dot {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  flex: none;
+  position: relative;
+}
+.banner.running .dot { background: var(--accent, var(--clinic)); }
+.banner.running .dot::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: var(--accent, var(--clinic));
+  opacity: .3;
+  animation: ping 2.4s ease-out infinite;
+}
+@keyframes ping {
+  0%   { transform: scale(.5); opacity: .35; }
+  70%  { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.banner .label { flex: 1; min-width: 0; }
+.banner .what {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.banner .since { font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
+.banner .elapsed {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--accent, var(--ink));
+}
+.banner:not(.running) .elapsed { display: none; }
+
+/* ---------- task grid ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.tile {
+  position: relative;
+  border-radius: var(--radius);
+  background: var(--c);
+  color: #fff;
+  min-height: 108px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  text-align: left;
+  box-shadow: var(--shadow);
+  transition: transform .12s ease, filter .12s ease;
+  overflow: hidden;
+}
+.tile:active { transform: scale(.97); filter: brightness(.95); }
+.tile .name {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.tile .state {
+  font-size: 13px;
+  opacity: .82;
+  font-variant-numeric: tabular-nums;
+}
+.tile.active .state {
+  font-size: 19px;
+  font-weight: 600;
+  opacity: 1;
+  letter-spacing: -0.02em;
+}
+/* "breathing" inset ring on the running tile */
+.tile.active::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 15px;
+  border: 2px solid rgba(255, 255, 255, .85);
+  animation: breathe 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes breathe {
+  0%, 100% { opacity: .25; transform: scale(.985); }
+  50%      { opacity: .9;  transform: scale(1); }
+}
+
+/* ---------- cards ---------- */
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+.card h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.card .sub { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+
+.rows { margin-top: 16px; }
+.row { margin-bottom: 13px; }
+.row:last-child { margin-bottom: 0; }
+.row .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+.row .top .n { font-weight: 550; }
+.row .top .v { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.track {
+  height: 8px;
+  border-radius: 99px;
+  background: #EFEAE4;
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--c);
+  width: 0;
+  transition: width .45s cubic-bezier(.4, 0, .2, 1);
+}
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+  font-weight: 650;
+}
+.total .v { font-variant-numeric: tabular-nums; }
+
+#flaggedCard { display: none; }
+#flaggedCard.show { display: block; }
+.flag {
+  display: flex;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.flag:last-child { border-bottom: 0; padding-bottom: 0; }
+.flag .chip {
+  flex: none;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+  margin-top: 6px;
+}
+.flag .when { color: var(--ink-soft); font-size: 12px; margin-top: 2px; }
+
+/* ---------- settings sheet ---------- */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(69, 63, 73, .32);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease;
+  z-index: 40;
+  backdrop-filter: blur(2px);
+}
+.scrim.open { opacity: 1; pointer-events: auto; }
+
+.sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 50;
+  background: var(--bg);
+  border-radius: 26px 26px 0 0;
+  padding: 10px 20px calc(28px + env(safe-area-inset-bottom));
+  max-height: 88vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  transform: translateY(101%);
+  transition: transform .3s cubic-bezier(.32, .72, 0, 1);
+  box-shadow: 0 -8px 40px rgba(69, 63, 73, .14);
+}
+.sheet.open { transform: translateY(0); }
+.handle {
+  width: 40px; height: 4px;
+  border-radius: 99px;
+  background: #DAD3CB;
+  margin: 4px auto 16px;
+}
+.sheet h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.02em; }
+.sheet .hint { font-size: 13px; color: var(--ink-soft); line-height: 1.45; margin: 0 0 16px; }
+.sheet h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--ink-soft);
+  margin: 24px 0 10px;
+  font-weight: 600;
+}
+input[type=url], input[type=text] {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 16px;
+  color: var(--ink);
+  outline: none;
+}
+input:focus { border-color: var(--clinic); }
+.btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--clinic);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  transition: transform .12s ease;
+}
+.btn:active { transform: scale(.98); }
+.btn.ghost { background: var(--card); color: var(--ink-soft); box-shadow: var(--shadow); }
+
+.link {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: var(--shadow);
+}
+.link .meta { flex: 1; min-width: 0; }
+.link .lname {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.link .lname i {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--c, var(--ink-soft));
+  display: inline-block;
+  flex: none;
+}
+.link .lurl {
+  font-size: 11px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.copy {
+  flex: none;
+  padding: 8px 13px;
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  transition: background .15s ease, color .15s ease;
+}
+.copy.done { background: var(--lunch); color: #fff; }
+
+#linksEmpty { font-size: 13px; color: var(--ink-soft); }
+
+/* ---------- toast ---------- */
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  transform: translate(-50%, 20px);
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  padding: 11px 18px;
+  border-radius: 99px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease, transform .25s ease;
+  z-index: 90;
+  max-width: 88vw;
+  text-align: center;
+}
+#toast.show { opacity: .96; transform: translate(-50%, 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="titles">
+    <h1>Shift Log</h1>
+    <div class="today" id="today"></div>
+  </div>
+  <button class="gear" id="gearBtn" aria-label="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#948C97" stroke-width="1.8"
+         stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </button>
+</header>
+
+<div class="banner" id="banner">
+  <div class="dot"></div>
+  <div class="label">
+    <div class="what" id="bannerWhat">Nothing running</div>
+    <div class="since" id="bannerSince">Tap a card below to start tracking</div>
+  </div>
+  <div class="elapsed" id="bannerElapsed">0:00</div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="card">
+  <h2>This week</h2>
+  <div class="sub" id="weekRange">Mon–Sun</div>
+  <div class="rows" id="summaryRows"></div>
+  <div class="total">
+    <span>Total</span>
+    <span class="v" id="totalHours">0h 00m</span>
+  </div>
+</div>
+
+<div class="card" id="flaggedCard">
+  <h2>Needs review</h2>
+  <div class="sub">
+    These were auto-stopped after 6 hours, so the logged time may be an
+    overestimate — please review.
+  </div>
+  <div id="flaggedList"></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="sheet" id="sheet">
+  <div class="handle"></div>
+  <h2>Settings</h2>
+  <p class="hint">
+    Paste the Google Apps Script Web App URL (the one ending in
+    <b>/exec</b>). Everything syncs to that sheet.
+  </p>
+  <input type="url" id="urlInput" placeholder="https://script.google.com/macros/s/.../exec"
+         autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url">
+  <button class="btn" id="saveUrl">Save</button>
+
+  <h3>NFC tag links</h3>
+  <div id="linksEmpty">Save your Web App URL to generate tag links.</div>
+  <div id="linksList"></div>
+
+  <button class="btn ghost" id="closeSheet" style="margin-top:24px">Done</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var TASKS = [
+    { id: 'clinic',  name: 'Clinic',  color: '#6D8CA3' },
+    { id: 'lunch',   name: 'Lunch',   color: '#87A08A' },
+    { id: 'notes',   name: 'Notes',   color: '#B98298' },
+    { id: 'inbox',   name: 'Inbox',   color: '#9689AE' },
+    { id: 'forms',   name: 'Forms',   color: '#BFA476' },
+    { id: 'meeting', name: 'Meeting', color: '#8A7391' }
+  ];
+  var BY_ID = {};
+  TASKS.forEach(function (t) { BY_ID[t.id] = t; });
+
+  var LS_URL = 'shiftlog.url';
+  var LS_QUEUE = 'shiftlog.queue';
+  var REFRESH_MS = 60000;
+  var RETRY_MS = 20000;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var scriptUrl = localStorage.getItem(LS_URL) || '';
+  var state = { active: null, totals: {}, totalHours: 0, flagged: [],
+                weekStart: null, weekEnd: null };
+  var inFlight = 0;
+
+  /* ---------- formatting ---------- */
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  // Live timer: M:SS under an hour, H:MM:SS above it.
+  function clock(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000));
+    var h = Math.floor(s / 3600);
+    var m = Math.floor((s % 3600) / 60);
+    var sec = s % 60;
+    return h > 0 ? h + ':' + pad(m) + ':' + pad(sec) : m + ':' + pad(sec);
+  }
+
+  // Totals: "3h 12m".
+  function hoursLabel(hours) {
+    var total = Math.round((hours || 0) * 60);
+    return Math.floor(total / 60) + 'h ' + pad(total % 60) + 'm';
+  }
+
+  function timeOfDay(date) {
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.classList.remove('show'); }, 2400);
+  }
+
+  /* ---------- rendering ---------- */
+
+  function buildGrid() {
+    var grid = $('grid');
+    TASKS.forEach(function (t) {
+      var b = document.createElement('button');
+      b.className = 'tile';
+      b.style.setProperty('--c', t.color);
+      b.dataset.task = t.id;
+      b.innerHTML = '<div class="name"></div><div class="state">Tap to start</div>';
+      b.querySelector('.name').textContent = t.name;
+      b.addEventListener('click', function () { onTileTap(t.id); });
+      grid.appendChild(b);
+    });
+  }
+
+  function buildSummaryRows() {
+    var wrap = $('summaryRows');
+    TASKS.forEach(function (t) {
+      var row = document.createElement('div');
+      row.className = 'row';
+      row.style.setProperty('--c', t.color);
+      row.innerHTML =
+        '<div class="top"><span class="n"></span><span class="v">0h 00m</span></div>' +
+        '<div class="track"><div class="fill" data-fill="' + t.id + '"></div></div>';
+      row.querySelector('.n').textContent = t.name;
+      row.querySelector('.v').dataset.val = t.id;
+      wrap.appendChild(row);
+    });
+  }
+
+  function renderBanner() {
+    var banner = $('banner');
+    if (!state.active) {
+      banner.classList.remove('running');
+      banner.style.removeProperty('--accent');
+      $('bannerWhat').textContent = 'Nothing running';
+      $('bannerSince').textContent = 'Tap a card below to start tracking';
+      return;
+    }
+    var t = BY_ID[state.active.task];
+    var started = new Date(state.active.startTime);
+    banner.classList.add('running');
+    banner.style.setProperty('--accent', t ? t.color : '#6D8CA3');
+    $('bannerWhat').textContent = (t ? t.name : state.active.task) + ' — running';
+    $('bannerSince').textContent = 'Started ' + timeOfDay(started);
+  }
+
+  function renderTiles() {
+    var activeId = state.active ? state.active.task : null;
+    Array.prototype.forEach.call(document.querySelectorAll('.tile'), function (tile) {
+      var isActive = tile.dataset.task === activeId;
+      tile.classList.toggle('active', isActive);
+      if (!isActive) {
+        var hours = state.totals[tile.dataset.task] || 0;
+        tile.querySelector('.state').textContent =
+          hours > 0 ? hoursLabel(hours) + ' this week' : 'Tap to start';
+      }
+    });
+  }
+
+  // Runs once a second: the two live timers.
+  function tick() {
+    if (!state.active) return;
+    var ms = Date.now() - new Date(state.active.startTime).getTime();
+    var text = clock(ms);
+    $('bannerElapsed').textContent = text;
+    var tile = document.querySelector('.tile.active .state');
+    if (tile) tile.textContent = text;
+  }
+
+  function renderSummary() {
+    var max = 0;
+    TASKS.forEach(function (t) { max = Math.max(max, state.totals[t.id] || 0); });
+
+    TASKS.forEach(function (t) {
+      var hours = state.totals[t.id] || 0;
+      document.querySelector('[data-val="' + t.id + '"]').textContent = hoursLabel(hours);
+      var pct = max > 0 ? (hours / max) * 100 : 0;
+      document.querySelector('[data-fill="' + t.id + '"]').style.width = pct + '%';
+    });
+    $('totalHours').textContent = hoursLabel(state.totalHours);
+
+    if (state.weekStart && state.weekEnd) {
+      var opts = { month: 'short', day: 'numeric' };
+      $('weekRange').textContent = 'Mon–Sun · ' +
+        new Date(state.weekStart).toLocaleDateString([], opts) + ' – ' +
+        new Date(state.weekEnd).toLocaleDateString([], opts);
+    }
+  }
+
+  function renderFlagged() {
+    var card = $('flaggedCard');
+    var list = $('flaggedList');
+    var items = state.flagged || [];
+    card.classList.toggle('show', items.length > 0);
+    list.innerHTML = '';
+    items.forEach(function (f) {
+      var t = BY_ID[f.task];
+      var when = new Date(f.time);
+      var el = document.createElement('div');
+      el.className = 'flag';
+      el.style.setProperty('--c', t ? t.color : '#948C97');
+      el.innerHTML = '<span class="chip"></span><div><div class="ftext"></div>' +
+                     '<div class="when"></div></div>';
+      el.querySelector('.ftext').textContent =
+        (t ? t.name : f.task) + ' — ' + (f.note || 'Auto-stopped after 6h.');
+      el.querySelector('.when').textContent =
+        when.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) +
+        ' at ' + timeOfDay(when);
+      list.appendChild(el);
+    });
+  }
+
+  function renderAll() {
+    renderBanner();
+    renderTiles();
+    renderSummary();
+    renderFlagged();
+    tick();
+  }
+
+  /* ---------- server sync ---------- */
+
+  function apply(data) {
+    if (!data || data.status !== 'ok') return false;
+    state.active = data.active || null;
+    state.totals = data.totals || {};
+    state.totalHours = data.totalHours || 0;
+    state.flagged = data.flagged || [];
+    state.weekStart = data.weekStart;
+    state.weekEnd = data.weekEnd;
+    renderAll();
+    return true;
+  }
+
+  function buildUrl(params) {
+    var qs = Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    return scriptUrl + (scriptUrl.indexOf('?') === -1 ? '?' : '&') + qs;
+  }
+
+  // Everything goes over GET: Apps Script does not answer CORS preflights.
+  function call(params) {
+    if (!scriptUrl) return Promise.reject(new Error('no-url'));
+    inFlight++;
+    return fetch(buildUrl(params), { method: 'GET', redirect: 'follow' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        if (data && data.status === 'error') throw new Error(data.message || 'error');
+        return data;
+      })
+      .finally(function () { inFlight--; });
+  }
+
+  function refresh() {
+    if (!scriptUrl) return Promise.resolve();
+    return call({ summary: 1 })
+      .then(apply)
+      .catch(function () { /* stale view is fine; the timers keep running */ });
+  }
+
+  /* ---------- offline queue ---------- */
+
+  function readQueue() {
+    try { return JSON.parse(localStorage.getItem(LS_QUEUE)) || []; }
+    catch (e) { return []; }
+  }
+
+  function writeQueue(q) {
+    localStorage.setItem(LS_QUEUE, JSON.stringify(q));
+  }
+
+  function enqueue(params) {
+    var q = readQueue();
+    q.push({ params: params, at: Date.now() });
+    writeQueue(q);
+    toast('Offline — saved, will sync');
+  }
+
+  // Drain oldest-first, stopping at the first failure so order is preserved.
+  function flushQueue() {
+    var q = readQueue();
+    if (!q.length || !scriptUrl) return Promise.resolve(false);
+
+    var item = q[0];
+    return call(item.params).then(function (data) {
+      writeQueue(readQueue().slice(1));
+      apply(data);
+      return flushQueue().then(function () { return true; });
+    }).catch(function () {
+      return false;
+    });
+  }
+
+  /* ---------- actions ---------- */
+
+  function onTileTap(taskId) {
+    if (!scriptUrl) {
+      openSheet();
+      toast('Add your Web App URL first');
+      return;
+    }
+    var isActive = state.active && state.active.task === taskId;
+    var params = isActive
+      ? { task: taskId, action: 'stop', source: 'button' }
+      : { task: taskId, action: 'start', source: 'button' };
+
+    // Optimistic: flip the UI now, reconcile with the server's answer after.
+    state.active = isActive ? null
+                            : { task: taskId, startTime: new Date().toISOString() };
+    renderAll();
+
+    call(params)
+      .then(apply)
+      .catch(function (err) {
+        if (String(err.message) === 'no-url') return;
+        enqueue(params);
+      });
+  }
+
+  /* ---------- settings sheet ---------- */
+
+  function openSheet() {
+    $('urlInput').value = scriptUrl;
+    $('sheet').classList.add('open');
+    $('scrim').classList.add('open');
+  }
+
+  function closeSheet() {
+    $('sheet').classList.remove('open');
+    $('scrim').classList.remove('open');
+  }
+
+  function linkRows() {
+    var rows = TASKS.map(function (t) {
+      return {
+        name: t.name,
+        color: t.color,
+        url: scriptUrl + '?action=start&task=' + t.id + '&source=nfc'
+      };
+    });
+    rows.push({
+      name: 'Stop (location)',
+      color: '#948C97',
+      url: scriptUrl + '?action=stop&source=location'
+    });
+    return rows;
+  }
+
+  function renderLinks() {
+    var list = $('linksList');
+    list.innerHTML = '';
+    $('linksEmpty').style.display = scriptUrl ? 'none' : 'block';
+    if (!scriptUrl) return;
+
+    linkRows().forEach(function (row) {
+      var el = document.createElement('div');
+      el.className = 'link';
+      el.style.setProperty('--c', row.color);
+      el.innerHTML =
+        '<div class="meta"><div class="lname"><i></i><span></span></div>' +
+        '<div class="lurl"></div></div>' +
+        '<button class="copy">Copy</button>';
+      el.querySelector('.lname span').textContent = row.name;
+      el.querySelector('.lurl').textContent = row.url;
+
+      var btn = el.querySelector('.copy');
+      btn.addEventListener('click', function () {
+        copyText(row.url).then(function () {
+          btn.textContent = 'Copied';
+          btn.classList.add('done');
+          setTimeout(function () {
+            btn.textContent = 'Copy';
+            btn.classList.remove('done');
+          }, 1600);
+        }).catch(function () { toast('Could not copy — long-press the link text'); });
+      });
+      list.appendChild(el);
+    });
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    // Fallback for older iOS Safari.
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('copy failed'));
+    });
+  }
+
+  function saveUrl() {
+    var value = $('urlInput').value.trim().replace(/[?&].*$/, '');
+    if (value && !/^https:\/\//.test(value)) {
+      toast('URL must start with https://');
+      return;
+    }
+    scriptUrl = value;
+    localStorage.setItem(LS_URL, scriptUrl);
+    renderLinks();
+    if (scriptUrl) {
+      toast('Saved — syncing…');
+      refresh().then(function () { flushQueue(); });
+    } else {
+      toast('URL cleared');
+    }
+  }
+
+  /* ---------- boot ---------- */
+
+  function init() {
+    $('today').textContent = new Date().toLocaleDateString([], {
+      weekday: 'long', month: 'long', day: 'numeric'
+    });
+
+    buildGrid();
+    buildSummaryRows();
+    renderAll();
+    renderLinks();
+
+    $('gearBtn').addEventListener('click', openSheet);
+    $('scrim').addEventListener('click', closeSheet);
+    $('closeSheet').addEventListener('click', closeSheet);
+    $('saveUrl').addEventListener('click', saveUrl);
+
+    setInterval(tick, 1000);
+    setInterval(function () { if (inFlight === 0) refresh(); }, REFRESH_MS);
+    setInterval(flushQueue, RETRY_MS);
+    window.addEventListener('online', function () {
+      flushQueue().then(refresh);
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { flushQueue(); refresh(); }
+    });
+
+    if (!scriptUrl) {
+      openSheet();
+    } else {
+      refresh().then(flushQueue);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
