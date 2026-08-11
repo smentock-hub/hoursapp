@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const SRC = '/home/user/hoursapp/shiftlog/apps-script/Code.gs';
+const SRC = path.join(__dirname, '..', 'apps-script', 'Code.gs');
 
 function makeEnv() {
   const rows = [];       // data rows only
@@ -65,7 +65,9 @@ env.Date = class extends RealDate {
   static now() { return now.getTime(); }
 };
 
-const at = (iso) => { now = new RealDate(iso); };
+const at = (iso) => { now = iso instanceof RealDate ? iso : new RealDate(iso); };
+// Local-time constructor, so boundary tests hold in whatever TZ the suite runs in.
+const local = (y, m, d, hh, mm) => new RealDate(y, m - 1, d, hh, mm, 0, 0);
 const j = (o) => JSON.parse(JSON.stringify(o));
 
 let failures = 0;
@@ -125,12 +127,12 @@ check('forms = 7h', h(s.totals.forms), 7);
 console.log('\n== week bounds: Mon 00:00 -> Sun 23:59 ==');
 // Bounds are local-time, so compare local components (not the UTC ISO string).
 const localDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const wb = env.getWeekBounds(new RealDate('2026-08-13T15:00:00-04:00')); // Thursday
+const wb = env.getWeekBounds(local(2026, 8, 13, 15, 0)); // Thursday
 check('week starts Monday Aug 10', localDay(wb.start), '2026-08-10');
 check('week starts at midnight', [wb.start.getHours(), wb.start.getMinutes()], [0, 0]);
 check('week ends Sunday Aug 16', localDay(wb.end), '2026-08-16');
 check('week ends at 23:59:59', [wb.end.getHours(), wb.end.getMinutes(), wb.end.getSeconds()], [23, 59, 59]);
-const wbSun = env.getWeekBounds(new RealDate('2026-08-16T15:00:00-04:00')); // Sunday
+const wbSun = env.getWeekBounds(local(2026, 8, 16, 15, 0)); // Sunday
 check('Sunday still maps to Aug 10 week', localDay(wbSun.start), '2026-08-10');
 
 console.log('\n== next week resets totals, prior week excluded ==');
@@ -141,12 +143,12 @@ check('total reset', h(s.totalHours), 0);
 check('flagged cleared (prior week)', s.flagged.length, 0);
 
 console.log('\n== overnight session clipped at the week boundary ==');
-at('2026-08-23T22:00:00-04:00'); env.logEvent('meeting', 'start', 'button', '');  // Sunday 10pm
-at('2026-08-24T01:00:00-04:00'); env.logEvent('meeting', 'stop', 'button', '');   // Monday 1am
-at('2026-08-24T02:00:00-04:00');
+at(local(2026, 8, 23, 22, 0)); env.logEvent('meeting', 'start', 'button', '');  // Sunday 10pm
+at(local(2026, 8, 24,  1, 0)); env.logEvent('meeting', 'stop', 'button', '');   // Monday 1am
+at(local(2026, 8, 24,  2, 0));
 s = env.getSummary();
 check('new week gets only the 1h after midnight', h(s.totals.meeting), 1);
-at('2026-08-23T23:00:00-04:00');
+at(local(2026, 8, 23, 23, 0));
 check('prior week gets the 2h before midnight', h(env.getSummary().totals.meeting), 2);
 
 console.log('\n== doGet routing ==');

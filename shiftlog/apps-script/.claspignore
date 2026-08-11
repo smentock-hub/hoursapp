@@ -1,0 +1,4 @@
+# Only the manifest and Code.gs belong in the Apps Script project.
+**/**
+!appsscript.json
+!Code.gs
