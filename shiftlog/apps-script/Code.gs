@@ -100,18 +100,46 @@ function tz_() {
   return Session.getScriptTimeZone();
 }
 
-/** Rows may hold a string or a Date depending on how Sheets stored them. */
+/**
+ * Rows may hold a Date (Sheets converted it) or a string. Hand-edited cells are
+ * accepted in the forgiving forms a person would actually type:
+ *
+ *   2026-08-11T16:50:14-07:00   written by the app
+ *   2026-08-11T23:50:14.280Z    UTC, written by older versions
+ *   2026-08-11 16:50:14         local time, no offset
+ *   2026-08-11 16:50            local time, seconds optional
+ *   2026-08-11                  local midnight
+ *
+ * Anything without an explicit offset is read as the project's local time,
+ * parsed by hand rather than left to the engine, whose behaviour for
+ * offset-less strings varies.
+ */
 function parseTs_(value) {
   if (value instanceof Date) return value;
   if (value === '' || value === null || value === undefined) return null;
-  var d = new Date(value);
+
+  var s = String(value).trim();
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?)?$/);
+  if (m) {
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+        Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0), 0);
+  }
+
+  var d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
+}
+
+/** Local ISO-8601 with an explicit offset, e.g. 2026-08-11T16:50:14-07:00. */
+function isoLocal_(when) {
+  var base = Utilities.formatDate(when, tz_(), "yyyy-MM-dd'T'HH:mm:ss");
+  var offset = Utilities.formatDate(when, tz_(), 'Z');       // e.g. -0700
+  return base + offset.slice(0, 3) + ':' + offset.slice(3);
 }
 
 function appendRow_(when, task, action, source, note) {
   var sheet = getSheet_();
   sheet.appendRow([
-    when.toISOString(),
+    isoLocal_(when),
     Utilities.formatDate(when, tz_(), 'yyyy-MM-dd'),
     Utilities.formatDate(when, tz_(), 'HH:mm:ss'),
     task || '',
@@ -119,6 +147,24 @@ function appendRow_(when, task, action, source, note) {
     source || '',
     note || ''
   ]);
+}
+
+/**
+ * Rows in chronological order, each paired with its parsed timestamp.
+ * Ties keep their sheet order, which matters because an auto-switch writes a
+ * stop and the following start at the very same instant.
+ */
+function sortedRows_() {
+  var rows = getRows_();
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var when = parseTs_(rows[i][C_TIMESTAMP]);
+    if (when) out.push({ row: rows[i], when: when, i: i });
+  }
+  out.sort(function (a, b) {
+    return (a.when.getTime() - b.when.getTime()) || (a.i - b.i);
+  });
+  return out;
 }
 
 /* ------------------------------------------------------------------ *
@@ -132,14 +178,12 @@ function appendRow_(when, task, action, source, note) {
  * @return {?{task: string, startTime: Date}}
  */
 function getActiveTask() {
-  var rows = getRows_();
+  var rows = sortedRows_();
   for (var i = rows.length - 1; i >= 0; i--) {
-    var action = String(rows[i][C_ACTION] || '').toLowerCase();
+    var action = String(rows[i].row[C_ACTION] || '').toLowerCase();
     if (action === 'stop') return null;
     if (action === 'start') {
-      var started = parseTs_(rows[i][C_TIMESTAMP]);
-      if (!started) return null;
-      return { task: String(rows[i][C_TASK] || ''), startTime: started };
+      return { task: String(rows[i].row[C_TASK] || ''), startTime: rows[i].when };
     }
   }
   return null;
@@ -262,13 +306,12 @@ function getSummary() {
   for (var t = 0; t < TASKS.length; t++) totals[TASKS[t]] = 0;
 
   var flagged = [];
-  var rows = getRows_();
+  var rows = sortedRows_();
   var open = null;   // {task, start}
 
   for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    var when = parseTs_(row[C_TIMESTAMP]);
-    if (!when) continue;
+    var row = rows[i].row;
+    var when = rows[i].when;
 
     var action = String(row[C_ACTION] || '').toLowerCase();
     var task = String(row[C_TASK] || '').toLowerCase();

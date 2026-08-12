@@ -33,11 +33,21 @@ function makeEnv() {
       createTextOutput: (t) => ({ setMimeType: () => ({ _text: t, getContent: () => t }) }),
     },
     Utilities: {
+      // Stands in for Apps Script's SimpleDateFormat, for the patterns Code.gs uses.
       formatDate: (d, tz, fmt) => {
         const p = (n) => String(n).padStart(2, '0');
-        return fmt === 'yyyy-MM-dd'
-          ? `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-          : `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+        const time = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        if (fmt === 'yyyy-MM-dd') return date;
+        if (fmt === 'HH:mm:ss') return time;
+        if (fmt === "yyyy-MM-dd'T'HH:mm:ss") return `${date}T${time}`;
+        if (fmt === 'Z') {                       // RFC-822 offset, e.g. -0700
+          const off = -d.getTimezoneOffset();
+          const sign = off < 0 ? '-' : '+';
+          const abs = Math.abs(off);
+          return `${sign}${p(Math.floor(abs / 60))}${p(abs % 60)}`;
+        }
+        throw new Error('unmocked format: ' + fmt);
       },
     },
     console,
@@ -151,8 +161,63 @@ check('new week gets only the 1h after midnight', h(s.totals.meeting), 1);
 at(local(2026, 8, 23, 23, 0));
 check('prior week gets the 2h before midnight', h(env.getSummary().totals.meeting), 2);
 
+console.log('\n== timestamps are written as readable local time ==');
+at(local(2026, 8, 25, 9, 0)); env.logEvent('clinic', 'start', 'button', '');
+const written = env.rows[env.rows.length - 1];
+check('timestamp matches the Date column', written[0].slice(0, 10), written[1]);
+check('timestamp matches the Time column', written[0].slice(11, 19), written[2]);
+check('timestamp carries an explicit offset', /[+-]\d{2}:\d{2}$/.test(written[0]), true);
+check('timestamp round-trips', env.getActiveTask().startTime.getTime(),
+      local(2026, 8, 25, 9, 0).getTime());
+at(local(2026, 8, 25, 10, 0)); env.logEvent('clinic', 'stop', 'button', '');
+
+console.log('\n== hand-edited timestamp formats are accepted ==');
+const formats = [
+  ['local, no offset',      '2026-08-31 09:00:00', local(2026, 8, 31, 9, 0)],
+  ['local, seconds omitted','2026-08-31 09:00',    local(2026, 8, 31, 9, 0)],
+  ['ISO T separator',       '2026-08-31T09:00:00', local(2026, 8, 31, 9, 0)],
+  ['date only -> midnight', '2026-08-31',          local(2026, 8, 31, 0, 0)],
+  ['explicit offset',       '2026-08-31T09:00:00-07:00', new RealDate('2026-08-31T09:00:00-07:00')],
+  ['UTC Z form',            '2026-08-31T16:00:00Z',      new RealDate('2026-08-31T16:00:00Z')],
+];
+formats.forEach(([label, text, expected]) => {
+  check(label, env.parseTs_(text).getTime(), expected.getTime());
+});
+check('blank cell is ignored', env.parseTs_(''), null);
+check('garbage is ignored', env.parseTs_('sometime tuesday'), null);
+
+console.log('\n== rows entered out of order are still paired correctly ==');
+env.rows.length = 0;
+// Deliberately append the stop above the start, as a hand-edit would.
+env.rows.push(['2026-09-07 11:00:00', '2026-09-07', '11:00:00', 'clinic', 'stop', 'manual', '']);
+env.rows.push(['2026-09-07 09:00:00', '2026-09-07', '09:00:00', 'clinic', 'start', 'manual', '']);
+at(local(2026, 9, 7, 12, 0));
+check('out-of-order pair totals 2h', h(env.getSummary().totals.clinic), 2);
+check('nothing looks active', env.getActiveTask(), null);
+
+console.log('\n== a correction inserted mid-log lands in the right place ==');
+env.rows.push(['2026-09-07 14:00:00', '2026-09-07', '14:00:00', 'lunch', 'start', 'manual', '']);
+env.rows.push(['2026-09-07 13:00:00', '2026-09-07', '13:00:00', 'notes', 'stop', 'manual', '']);
+env.rows.push(['2026-09-07 12:30:00', '2026-09-07', '12:30:00', 'notes', 'start', 'manual', '']);
+env.rows.push(['2026-09-07 14:30:00', '2026-09-07', '14:30:00', 'lunch', 'stop', 'manual', '']);
+at(local(2026, 9, 7, 15, 0));
+let sc = env.getSummary();
+check('clinic still 2h', h(sc.totals.clinic), 2);
+check('notes 0.5h', h(sc.totals.notes), 0.5);
+check('lunch 0.5h', h(sc.totals.lunch), 0.5);
+
+console.log('\n== simultaneous auto-switch rows keep their order ==');
+env.rows.length = 0;
+at(local(2026, 9, 14, 9, 0)); env.logEvent('clinic', 'start', 'button', '');
+at(local(2026, 9, 14, 11, 0)); env.logEvent('notes', 'start', 'nfc', '');   // same instant
+at(local(2026, 9, 14, 12, 0)); env.logEvent('notes', 'stop', 'button', '');
+sc = env.getSummary();
+check('clinic keeps its 2h', h(sc.totals.clinic), 2);
+check('notes keeps its 1h', h(sc.totals.notes), 1);
+
 console.log('\n== doGet routing ==');
-at('2026-08-25T09:00:00-04:00');
+env.rows.length = 0;
+at(local(2026, 9, 21, 9, 0));
 let out = JSON.parse(env.doGet({ parameter: { summary: '1' } })._text);
 check('summary status ok', out.status, 'ok');
 out = JSON.parse(env.doGet({ parameter: { action: 'start', task: 'inbox', source: 'nfc' } })._text);

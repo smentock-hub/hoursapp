@@ -58,9 +58,47 @@ app also refreshes the summary every 60s while open.
 
 ## Sheet columns
 
-`Timestamp` (ISO) · `Date` · `Time` · `Task` · `Action` · `Source` · `Note`
+`Timestamp` · `Date` · `Time` · `Task` · `Action` · `Source` · `Note`
 
 The `Log` tab and its header row are created automatically on first write.
+
+## Correcting entries by hand
+
+Edit the sheet directly — every total is recomputed from these rows on each
+request, so there is no cached state to invalidate.
+
+**`Timestamp` is the only column the math reads.** `Date` and `Time` are
+human-readable copies kept for scanning the log; changing them alone does
+nothing. The app writes local ISO-8601 with an explicit offset:
+
+```
+2026-08-11T16:50:14-07:00
+└──┬───┘ ┬ └──┬───┘└──┬──┘
+   │     │    │       └─ offset from UTC (-07:00 = Pacific Daylight Time)
+   │     │    └───────── 24-hour clock: 16:50:14 is 4:50:14 pm
+   │     └────────────── separator between the date and the time
+   └──────────────────── year-month-day
+```
+
+When correcting a row you can type any of these instead — all are read as
+project-local time unless they carry their own offset:
+
+| You type | Means |
+| --- | --- |
+| `2026-08-11 16:50:00` | 4:50 pm local |
+| `2026-08-11 16:50` | same; seconds optional |
+| `2026-08-11T16:50:00` | same; `T` or a space both work |
+| `2026-08-11` | midnight local |
+| `2026-08-11T23:50:14.280Z` | UTC (the `Z`), which older rows use |
+
+Rows are sorted by `Timestamp` before pairing, so a correction does **not**
+need to be inserted in the right position — put it anywhere and the totals
+come out right. Two rows sharing a timestamp keep their sheet order, which is
+what makes an auto-switch's stop-then-start pair unambiguous.
+
+Two rules still apply: `start` and `stop` must alternate for a task to be
+paired, and if the chronologically last row is a `start`, the app treats that
+task as currently running.
 
 ## Development
 
