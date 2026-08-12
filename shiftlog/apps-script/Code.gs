@@ -30,6 +30,12 @@ var FLAG_COLOR = '#F7E0C3';        // warm amber, in key with the app's palette
 // sheet is upgraded once rather than re-checked on every request.
 var SCHEMA_VERSION = '3';
 
+// Part of the Weekly tab's fingerprint. Bump it whenever a change to how hours
+// are computed would give a different answer for the same rows — otherwise the
+// tab keeps figures produced by the old code, because the log itself has not
+// changed and nothing asks for a rebuild.
+var WEEKLY_ALGO_VERSION = '2';
+
 var AUTO_STOP_NOTE = 'Auto-stopped after ' + AUTO_STOP_HOURS +
     'h — review, may be inaccurate.';
 
@@ -522,7 +528,7 @@ function buildIntervals_() {
   // Cheap fingerprint of the log's shape: the row count catches insertions and
   // deletions, the summed times catch an edit to any single row. Deleting rows
   // does not fire onEdit, so this is what lets the Weekly tab notice.
-  var fingerprint = rows.length + ':' + sumMs;
+  var fingerprint = WEEKLY_ALGO_VERSION + ':' + rows.length + ':' + sumMs;
 
   return {
     intervals: intervals,

@@ -477,6 +477,15 @@ env.getSummary();
 env.getSummary();
 check('repeat refreshes skip the write', env.getWeeklyGrid().length, 0);
 
+console.log('\n== a computation change forces one rebuild ==');
+// The log is unchanged, so only the algorithm version can trigger this. Without
+// it the tab would keep serving figures produced by superseded code.
+env.clearWeeklyGrid();
+env.getSummary();
+check('unchanged log still skips the write', env.getWeeklyGrid().length, 0);
+check('fingerprint carries the algorithm version',
+      env.buildIntervals_().fingerprint.split(':')[0], env.WEEKLY_ALGO_VERSION);
+
 console.log('\n== editing a time in place is still noticed ==');
 env.rows[1][2] = '11:00:00';                        // 1h becomes 2h
 env.getSummary();

@@ -573,8 +573,13 @@ input:focus { border-color: var(--clinic); }
     if (!state.active) {
       banner.classList.remove('running');
       banner.style.removeProperty('--accent');
-      $('bannerWhat').textContent = 'Nothing running';
-      $('bannerSince').textContent = '';
+      if (!scriptUrl) {
+        $('bannerWhat').textContent = 'Not connected';
+        $('bannerSince').textContent = 'Tap the gear to add your Web App URL';
+      } else {
+        $('bannerWhat').textContent = 'Nothing running';
+        $('bannerSince').textContent = '';
+      }
       return;
     }
     var t = BY_ID[state.active.task];
@@ -893,11 +898,9 @@ input:focus { border-color: var(--clinic); }
       if (!document.hidden) { flushQueue(); refresh(); }
     });
 
-    if (!scriptUrl) {
-      openSheet();
-    } else {
-      refresh().then(flushQueue);
-    }
+    // Never open Settings unasked. Without a URL the banner says so and the
+    // gear is one tap away; refresh() is a no-op until one is saved.
+    refresh().then(flushQueue);
   }
 
   if (document.readyState === 'loading') {

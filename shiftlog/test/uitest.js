@@ -31,7 +31,16 @@ function ok(label, cond, extra) {
   const fp = await fresh.newPage();
   await fp.goto(BASE + '/index.html');
   await fp.waitForTimeout(1200);
-  ok('first run opens settings automatically',
+  ok('first run does NOT open settings',
+     await fp.locator('#sheet.open').count() === 0);
+  ok('unconfigured banner points at the gear',
+     (await fp.locator('#bannerWhat').textContent()).trim() === 'Not connected',
+     (await fp.locator('#bannerWhat').textContent()).trim());
+  ok('and says how to fix it',
+     (await fp.locator('#bannerSince').textContent()).includes('gear'));
+  await fp.locator('#gearBtn').click();
+  await fp.waitForTimeout(700);
+  ok('gear still opens settings on demand',
      await fp.locator('#sheet.open').count() === 1);
   await fp.screenshot({ path: OUT + '/shot-firstrun.png', fullPage: true });
   await fresh.close();

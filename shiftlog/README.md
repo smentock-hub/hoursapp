@@ -13,7 +13,10 @@ Inbox, Forms, Meeting — backed by a Google Sheet.
 
 1. Open https://shift-log.pages.dev in Safari.
 2. Share → **Add to Home Screen**. It launches full-screen with no browser chrome.
-3. Open it, tap the gear, paste the `/exec` URL above, tap **Save**.
+3. Open it, tap the **gear**, paste the `/exec` URL above, tap **Save**.
+
+Until a URL is saved the banner reads "Not connected"; Settings never opens by
+itself.
 
 The URL is stored in `localStorage`, so it is per-device — repeat step 3 on any
 other phone or tablet.
@@ -120,8 +123,11 @@ row is reflected the next time it runs and the tab can never drift out of step
 with the log it summarises. Both it and the app's weekly figures come from the
 same pairing code, so the two cannot disagree.
 
-Rebuilds are driven by a fingerprint of the log (row count plus the sum of all
-row times), checked on every summary read. Anything that changes the log is
+Rebuilds are driven by a fingerprint of the log (an algorithm version, the row
+count, and the sum of all row times), checked on every summary read. The
+algorithm version is what forces a rebuild when a change to how hours are
+computed would give a different answer for unchanged rows — without it the tab
+would keep serving figures from superseded code. Anything that changes the log is
 therefore picked up — including **deleting rows, which fires no trigger at all**
 — while an unchanged log costs no write, so an idle app refreshing every 60
 seconds never touches the sheet. An `onEdit` trigger additionally refreshes it
@@ -183,11 +189,11 @@ task as currently running.
 ```sh
 cd test && npm install
 
-# backend logic against a fake Sheets environment (111 checks).
+# backend logic against a fake Sheets environment (113 checks).
 # Run it in the project timezone — week boundaries are local-time.
 TZ=America/Los_Angeles npm run test:backend
 
-# frontend in a real browser against a mock backend (31 checks).
+# frontend in a real browser against a mock backend (34 checks).
 npm run serve &                  # serves ../web plus a stand-in /exec on :8099
 npm run test:ui                  # set CHROMIUM_PATH to reuse an existing browser
 ```
