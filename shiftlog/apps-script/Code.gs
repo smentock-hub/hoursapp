@@ -7,6 +7,7 @@
  */
 
 var SHEET_NAME = 'Log';
+var WEEKLY_SHEET_NAME = 'Weekly';
 var HEADERS = ['Timestamp', 'Date', 'Time', 'Task', 'Action', 'Source', 'Note',
                'Verified'];
 var TASKS = ['clinic', 'lunch', 'notes', 'inbox', 'forms', 'meeting'];
@@ -351,6 +352,7 @@ function logEvent(task, action, source, note) {
       // Nothing running and no task named: nothing to stop.
     }
 
+    rebuildWeekly_();
     return getSummary();
   } finally {
     lock.releaseLock();
@@ -384,6 +386,7 @@ function checkAutoStop() {
     }
     appendRow_(new Date(), stillActive.task, 'stop', 'auto-safety',
         AUTO_STOP_NOTE);
+    rebuildWeekly_();
   } finally {
     lock.releaseLock();
   }
@@ -417,21 +420,23 @@ function overlapHours_(from, to, weekStart, weekEnd) {
  * Pair start/stop events per task and total the hours falling inside the
  * current Mon–Sun week. A running task contributes its elapsed time so far.
  */
-function getSummary() {
-  var now = new Date();
-  var week = getWeekBounds(now);
-
-  var totals = {};
-  for (var t = 0; t < TASKS.length; t++) totals[TASKS[t]] = 0;
-
-  var flagged = [];
+/**
+ * Walk the log once and pair start/stop events into closed intervals.
+ *
+ * Both the app's weekly summary and the Weekly tab are built from this, so the
+ * two can never disagree about what the log says.
+ *
+ * @return {{intervals: !Array, open: ?Object, flagged: !Array}}
+ */
+function buildIntervals_() {
   var rows = sortedRows_();
-  var open = null;   // {task, start}
+  var intervals = [];
+  var flagged = [];
+  var open = null;
 
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i].row;
     var when = rows[i].when;
-
     var action = String(row[C_ACTION] || '').toLowerCase();
     var task = String(row[C_TASK] || '').toLowerCase();
     var source = String(row[C_SOURCE] || '').toLowerCase();
@@ -439,30 +444,43 @@ function getSummary() {
     if (action === 'start') {
       // A start with something already open shouldn't happen, but close it
       // here rather than dropping the interval.
-      if (open) addHours_(totals, open.task, open.start, when, week);
+      if (open) intervals.push({ task: open.task, from: open.start, to: when });
       open = { task: task, start: when };
     } else if (action === 'stop') {
       if (open) {
-        addHours_(totals, open.task, open.start, when, week);
+        intervals.push({ task: open.task, from: open.start, to: when });
         open = null;
       }
-      if (source === SAFETY_SOURCE &&
-          !isVerified_(row[C_VERIFIED]) &&
-          when.getTime() >= week.start.getTime() &&
-          when.getTime() <= week.end.getTime()) {
+      if (source === SAFETY_SOURCE && !isVerified_(row[C_VERIFIED])) {
         flagged.push({
           task: task,
-          time: when.toISOString(),
+          when: when,
           note: String(row[C_NOTE] || AUTO_STOP_NOTE)
         });
       }
     }
   }
 
-  var active = null;
-  if (open) {
-    addHours_(totals, open.task, open.start, now, week);
-    active = { task: open.task, startTime: open.start.toISOString() };
+  return { intervals: intervals, open: open, flagged: flagged };
+}
+
+function emptyTotals_() {
+  var totals = {};
+  for (var t = 0; t < TASKS.length; t++) totals[TASKS[t]] = 0;
+  return totals;
+}
+
+/** Total each task's hours falling inside [week.start, week.end]. */
+function totalsForWeek_(parsed, week, now) {
+  var totals = emptyTotals_();
+
+  for (var i = 0; i < parsed.intervals.length; i++) {
+    var iv = parsed.intervals[i];
+    addHours_(totals, iv.task, iv.from, iv.to, week);
+  }
+  // A running task contributes its elapsed time so far.
+  if (parsed.open && now) {
+    addHours_(totals, parsed.open.task, parsed.open.start, now, week);
   }
 
   var totalHours = 0;
@@ -470,14 +488,37 @@ function getSummary() {
     totals[key] = Math.round(totals[key] * 1000) / 1000;
     totalHours += totals[key];
   }
+  return { totals: totals, totalHours: Math.round(totalHours * 1000) / 1000 };
+}
+
+/**
+ * Pair start/stop events per task and total the hours falling inside the
+ * current Mon–Sun week. A running task contributes its elapsed time so far.
+ */
+function getSummary() {
+  var now = new Date();
+  var week = getWeekBounds(now);
+  var parsed = buildIntervals_();
+  var summed = totalsForWeek_(parsed, week, now);
+
+  var flagged = [];
+  for (var i = 0; i < parsed.flagged.length; i++) {
+    var f = parsed.flagged[i];
+    if (f.when.getTime() >= week.start.getTime() &&
+        f.when.getTime() <= week.end.getTime()) {
+      flagged.push({ task: f.task, time: f.when.toISOString(), note: f.note });
+    }
+  }
 
   return {
     status: 'ok',
     weekStart: week.start.toISOString(),
     weekEnd: week.end.toISOString(),
-    totals: totals,
-    totalHours: Math.round(totalHours * 1000) / 1000,
-    active: active,
+    totals: summed.totals,
+    totalHours: summed.totalHours,
+    active: parsed.open
+        ? { task: parsed.open.task, startTime: parsed.open.start.toISOString() }
+        : null,
     flagged: flagged
   };
 }
@@ -485,4 +526,103 @@ function getSummary() {
 function addHours_(totals, task, from, to, week) {
   if (!task || !(task in totals)) return;
   totals[task] += overlapHours_(from, to, week.start, week.end);
+}
+
+/* ------------------------------------------------------------------ *
+ * Weekly tab
+ * ------------------------------------------------------------------ */
+
+/** The Monday 00:00 that starts the week containing `date`, as a key. */
+function weekKey_(date) {
+  return Utilities.formatDate(getWeekBounds(date).start, tz_(), 'yyyy-MM-dd');
+}
+
+/**
+ * Split an interval across every Mon–Sun week it touches, so a session running
+ * past Sunday midnight lands partly in each week rather than wholly in one.
+ */
+function addIntervalToWeeks_(byWeek, task, from, to) {
+  if (!task || TASKS.indexOf(task) === -1) return;
+  if (to.getTime() <= from.getTime()) return;
+
+  var cursor = new Date(from.getTime());
+  var guard = 0;
+  while (cursor.getTime() < to.getTime() && guard++ < 520) {   // ~10 years
+    var week = getWeekBounds(cursor);
+    var key = Utilities.formatDate(week.start, tz_(), 'yyyy-MM-dd');
+    if (!byWeek[key]) byWeek[key] = emptyTotals_();
+    byWeek[key][task] += overlapHours_(from, to, week.start, week.end);
+
+    // Step into the following week.
+    cursor = new Date(week.end.getTime() + 1);
+  }
+}
+
+/**
+ * Rebuild the read-only "Weekly" tab: one row per week, newest first.
+ *
+ * Recomputed from the log rather than accumulated, so hand-corrections to past
+ * rows are reflected the next time it runs and the tab can never drift.
+ */
+function rebuildWeekly_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(WEEKLY_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(WEEKLY_SHEET_NAME);
+
+  var parsed = buildIntervals_();
+  var now = new Date();
+  var byWeek = {};
+
+  for (var i = 0; i < parsed.intervals.length; i++) {
+    var iv = parsed.intervals[i];
+    addIntervalToWeeks_(byWeek, iv.task, iv.from, iv.to);
+  }
+  if (parsed.open) {
+    addIntervalToWeeks_(byWeek, parsed.open.task, parsed.open.start, now);
+  }
+
+  var keys = Object.keys(byWeek).sort().reverse();          // newest week first
+  var header = ['Week of (Mon)'];
+  for (var t = 0; t < TASKS.length; t++) {
+    header.push(TASKS[t].charAt(0).toUpperCase() + TASKS[t].slice(1));
+  }
+  header.push('Total');
+
+  var out = [header];
+  for (var k = 0; k < keys.length; k++) {
+    var totals = byWeek[keys[k]];
+    var line = [keys[k]];
+    var sum = 0;
+    for (var n = 0; n < TASKS.length; n++) {
+      var hours = Math.round(totals[TASKS[n]] * 100) / 100;
+      line.push(hours);
+      sum += hours;
+    }
+    line.push(Math.round(sum * 100) / 100);
+    out.push(line);
+  }
+
+  sheet.clear();
+  sheet.getRange(1, 1, out.length, header.length).setValues(out);
+  sheet.getRange(1, 1, 1, header.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  if (out.length > 1) {
+    sheet.getRange(2, 2, out.length - 1, header.length - 1)
+        .setNumberFormat('0.00');
+  }
+  return out.length - 1;
+}
+
+/**
+ * Simple trigger: keep the Weekly tab honest after a hand-correction in the
+ * Log. Failures are swallowed so a bad edit can never block editing.
+ */
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    if (e.range.getSheet().getName() !== SHEET_NAME) return;
+    rebuildWeekly_();
+  } catch (err) {
+    // Nothing useful to do from a simple trigger.
+  }
 }

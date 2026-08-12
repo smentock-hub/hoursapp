@@ -7,7 +7,7 @@ Inbox, Forms, Meeting — backed by a Google Sheet.
 | --- | --- |
 | Web app (PWA) | https://shift-log.pages.dev |
 | Backend (Apps Script web app) | `https://script.google.com/macros/s/AKfycbzeAjV9VK4Hw9OOpqyR3Ocgco8kD9NheWVtIKmbTgDOJz1AnRvZN6WTSYci7wChkwGcSQ/exec` |
-| Data | Google Sheet "Shift Log", tab `Log` |
+| Data | Google Sheet "Shift Log": `Log` (events) and `Weekly` (rollup) |
 
 ## Setup on a phone
 
@@ -63,6 +63,28 @@ Taps made without a connection are queued in `localStorage`, replayed when the
 network returns, on the browser's `online` event, and on a 20s retry timer. The
 app also refreshes the summary every 60s while open.
 
+## The Weekly tab
+
+A second, read-only tab: one row per Mon–Sun week, newest at the top, with a
+column per task and a total.
+
+```
+Week of (Mon)   Clinic  Lunch  Notes  Inbox  Forms  Meeting  Total
+2026-10-19        6.25   2.00   3.50   1.00   0.50     2.00  15.25
+2026-10-12       21.00   4.25   8.00   3.25   1.00     4.50  42.00
+```
+
+It is **recomputed from the Log**, never accumulated, so a correction to a past
+row is reflected the next time it runs and the tab can never drift out of step
+with the log it summarises. Both it and the app's weekly figures come from the
+same pairing code, so the two cannot disagree.
+
+Rebuilds happen when the app records an event and, via an `onEdit` trigger,
+after you edit the Log by hand. A session running past Sunday midnight is split
+across the two weeks rather than counted wholly in one.
+
+Do not type into this tab — it is overwritten on every rebuild.
+
 ## Sheet columns
 
 `Timestamp` · `Date` · `Time` · `Task` · `Action` · `Source` · `Note` · `Verified`
@@ -104,7 +126,7 @@ task as currently running.
 ```sh
 cd test && npm install
 
-# backend logic against a fake Sheets environment (76 checks).
+# backend logic against a fake Sheets environment (97 checks).
 # Run it in the project timezone — week boundaries are local-time.
 TZ=America/Los_Angeles npm run test:backend
 

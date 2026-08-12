@@ -30,13 +30,43 @@ function makeEnv() {
     getConditionalFormatRules: () => formatRules,
   };
 
-  const ss = { getSheetByName: (n) => (n === 'Log' ? sheet : null), insertSheet: () => sheet };
+  // A second, simpler sheet stands in for the read-only Weekly tab.
+  let weeklyGrid = [];
+  const weeklySheet = {
+    getName: () => 'Weekly',
+    clear: () => { weeklyGrid = []; },
+    setFrozenRows: () => {},
+    getLastRow: () => weeklyGrid.length,
+    getMaxRows: () => 1000,
+    getRange: (r, c, nr, nc) => {
+      const range = {
+        setValues: (v) => {
+          v.forEach((line, idx) => {
+            weeklyGrid[r - 1 + idx] = (weeklyGrid[r - 1 + idx] || []).slice();
+            line.forEach((cell, j) => { weeklyGrid[r - 1 + idx][c - 1 + j] = cell; });
+          });
+          return range;
+        },
+        setFontWeight: () => range,
+        setNumberFormat: () => range,
+        getValues: () => weeklyGrid.slice(r - 1, r - 1 + nr).map((x) => (x || []).slice(c - 1, c - 1 + nc)),
+      };
+      return range;
+    },
+  };
+
+  const sheets = { Log: sheet, Weekly: weeklySheet };
+  const ss = {
+    getSheetByName: (n) => sheets[n] || null,
+    insertSheet: (n) => sheets[n] || sheet,
+  };
 
   const props = {};
   const sandbox = {
     rows,
     checkboxCells,
     getFormatRules: () => formatRules,
+    getWeeklyGrid: () => weeklyGrid,
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (k) => (k in props ? props[k] : null),
@@ -320,6 +350,80 @@ at(local(2026, 9, 14, 12, 0)); env.logEvent('notes', 'stop', 'button', '');
 sc = env.getSummary();
 check('clinic keeps its 2h', h(sc.totals.clinic), 2);
 check('notes keeps its 1h', h(sc.totals.notes), 1);
+
+console.log('\n== Weekly tab: one row per week, newest first ==');
+env.rows.length = 0;
+// Two sessions in the week of Mon Oct 12, one in the week of Mon Oct 19.
+env.rows.push(['', '2026-10-12', '09:00:00', 'clinic', 'start', 'manual', '', '']);
+env.rows.push(['', '2026-10-12', '12:00:00', 'clinic', 'stop', 'manual', '', '']);
+env.rows.push(['', '2026-10-14', '09:00:00', 'notes', 'start', 'manual', '', '']);
+env.rows.push(['', '2026-10-14', '10:30:00', 'notes', 'stop', 'manual', '', '']);
+env.rows.push(['', '2026-10-20', '13:00:00', 'lunch', 'start', 'manual', '', '']);
+env.rows.push(['', '2026-10-20', '14:00:00', 'lunch', 'stop', 'manual', '', '']);
+at(local(2026, 10, 21, 9, 0));
+env.rebuildWeekly_();
+let grid = env.getWeeklyGrid();
+
+check('header row', grid[0], ['Week of (Mon)', 'Clinic', 'Lunch', 'Notes', 'Inbox',
+                             'Forms', 'Meeting', 'Total']);
+check('two week rows', grid.length - 1, 2);
+check('newest week first', grid[1][0], '2026-10-19');
+check('older week second', grid[2][0], '2026-10-12');
+check('lunch 1h in the newer week', grid[1][2], 1);
+check('newer week total', grid[1][7], 1);
+check('clinic 3h in the older week', grid[2][1], 3);
+check('notes 1.5h in the older week', grid[2][3], 1.5);
+check('older week total', grid[2][7], 4.5);
+check('untouched task reads 0', grid[2][4], 0);
+
+console.log('\n== a session crossing Sunday midnight splits across weeks ==');
+env.rows.length = 0;
+env.rows.push(['', '2026-10-18', '22:00:00', 'meeting', 'start', 'manual', '', '']);
+env.rows.push(['', '2026-10-19', '01:00:00', 'meeting', 'stop', 'manual', '', '']);
+at(local(2026, 10, 20, 9, 0));
+env.rebuildWeekly_();
+grid = env.getWeeklyGrid();
+check('split across two weeks', grid.length - 1, 2);
+check('1h lands in the new week', grid[1][6], 1);
+check('2h stays in the old week', grid[2][6], 2);
+
+console.log('\n== Weekly agrees with what the app reports ==');
+env.rows.length = 0;
+at(local(2026, 10, 26, 9, 0)); env.logEvent('clinic', 'start', 'button', '');
+at(local(2026, 10, 26, 11, 30)); env.logEvent('notes', 'start', 'nfc', '');
+at(local(2026, 10, 26, 12, 0)); env.logEvent('notes', 'stop', 'button', '');
+at(local(2026, 10, 26, 13, 0));
+env.rebuildWeekly_();
+grid = env.getWeeklyGrid();
+const appTotals = env.getSummary();
+check('same clinic hours', grid[1][1], h(appTotals.totals.clinic));
+check('same notes hours', grid[1][3], h(appTotals.totals.notes));
+check('same total', grid[1][7], h(appTotals.totalHours));
+
+console.log('\n== a running task counts toward the current week ==');
+env.rows.length = 0;
+at(local(2026, 11, 2, 9, 0)); env.logEvent('forms', 'start', 'button', '');
+at(local(2026, 11, 2, 11, 0));
+env.rebuildWeekly_();
+check('running time included', env.getWeeklyGrid()[1][5], 2);
+
+console.log('\n== rebuilding is idempotent and drops removed weeks ==');
+env.rows.length = 0;
+at(local(2026, 11, 9, 9, 0));
+env.rebuildWeekly_();
+check('empty log leaves only the header', env.getWeeklyGrid().length, 1);
+
+console.log('\n== editing the Log refreshes Weekly ==');
+env.rows.length = 0;
+env.rows.push(['', '2026-11-16', '09:00:00', 'inbox', 'start', 'manual', '', '']);
+env.rows.push(['', '2026-11-16', '10:00:00', 'inbox', 'stop', 'manual', '', '']);
+at(local(2026, 11, 16, 11, 0));
+env.onEdit({ range: { getSheet: () => ({ getName: () => 'Log' }) } });
+check('onEdit rebuilt the tab', env.getWeeklyGrid()[1][4], 1);
+env.rows.push(['', '2026-11-16', '11:00:00', 'inbox', 'start', 'manual', '', '']);
+env.onEdit({ range: { getSheet: () => ({ getName: () => 'Weekly' }) } });
+check('edits to other tabs are ignored', env.getWeeklyGrid()[1][4], 1);
+check('a malformed event does not throw', env.onEdit({}), undefined);
 
 console.log('\n== doGet routing ==');
 env.rows.length = 0;
