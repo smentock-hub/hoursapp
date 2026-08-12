@@ -38,6 +38,11 @@ function ok(label, cond, extra) {
      (await fp.locator('#bannerWhat').textContent()).trim());
   ok('and says how to fix it',
      (await fp.locator('#bannerSince').textContent()).includes('gear'));
+  ok('weekly card explains itself instead of drawing a zero week',
+     await fp.locator('#weekProblem.show').count() === 1);
+  ok('the zero bars are hidden', await fp.locator('#weekBody.hide').count() === 1);
+  ok('with a button into settings',
+     await fp.locator('#weekProblemBtn').isVisible());
   await fp.locator('#gearBtn').click();
   await fp.waitForTimeout(700);
   ok('gear still opens settings on demand',
@@ -63,6 +68,8 @@ function ok(label, cond, extra) {
   ok('idle banner', (await page.locator('#bannerWhat').textContent()).trim() === 'Nothing running');
   ok('total hours rendered', (await page.locator('#totalHours').textContent()).trim() === '24h 06m',
      await page.locator('#totalHours').textContent());
+  ok('connected: the bars are shown', await page.locator('#weekBody.hide').count() === 0);
+  ok('connected: no problem notice', await page.locator('#weekProblem.show').count() === 0);
   ok('flagged card visible when entries exist',
      await page.locator('#flaggedCard.show').count() === 1);
   ok('flagged mentions review',
