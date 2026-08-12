@@ -28,7 +28,7 @@ var FLAG_COLOR = '#F7E0C3';        // warm amber, in key with the app's palette
 
 // Bumped when the sheet's headers or formatting rules change, so an existing
 // sheet is upgraded once rather than re-checked on every request.
-var SCHEMA_VERSION = '2';
+var SCHEMA_VERSION = '3';
 
 var AUTO_STOP_NOTE = 'Auto-stopped after ' + AUTO_STOP_HOURS +
     'h — review, may be inaccurate.';
@@ -116,6 +116,14 @@ function ensureSchema_(sheet) {
   var props = PropertiesService.getScriptProperties();
   if (props.getProperty('schemaVersion') === SCHEMA_VERSION) return;
 
+  // The spreadsheet and the script must agree on the timezone, or date and
+  // time cells read back shifted. clasp creates the container in its own
+  // default zone, which is how they diverge in the first place.
+  var ss = sheet.getParent();
+  if (ss.getSpreadsheetTimeZone() !== tz_()) {
+    ss.setSpreadsheetTimeZone(tz_());
+  }
+
   sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]).setFontWeight('bold');
 
   var flagRange = sheet.getRange(2, 1, sheet.getMaxRows() - 1, HEADERS.length);
@@ -129,12 +137,43 @@ function ensureSchema_(sheet) {
   props.setProperty('schemaVersion', SCHEMA_VERSION);
 }
 
-/** All data rows (header excluded), oldest first. */
+/**
+ * All data rows (header excluded), oldest first.
+ *
+ * Sheets turns a typed date or time into a serial number, which comes back from
+ * getValues() as a Date anchored in the *spreadsheet's* timezone. If that
+ * differs from the script's, reading the Date's local fields silently shifts
+ * every hand-entered row — by hours, and often onto the previous day.
+ *
+ * So for the Date and Time columns we prefer getDisplayValues(): the literal
+ * text on screen, with no timezone semantics attached. What you see in the cell
+ * is what gets counted. The Date object remains the fallback for a display
+ * format the parsers do not recognise.
+ */
 function getRows_() {
   var sheet = getSheet_();
   var last = sheet.getLastRow();
   if (last < 2) return [];
-  return sheet.getRange(2, 1, last - 1, HEADERS.length).getValues();
+
+  var range = sheet.getRange(2, 1, last - 1, HEADERS.length);
+  var values = range.getValues();
+  var shown = range.getDisplayValues();
+
+  for (var r = 0; r < values.length; r++) {
+    values[r][C_DATE] = preferDisplay_(values[r][C_DATE], shown[r][C_DATE],
+        parseDateCell_);
+    values[r][C_TIME] = preferDisplay_(values[r][C_TIME], shown[r][C_TIME],
+        parseTimeCell_);
+  }
+  return values;
+}
+
+/** The displayed text if it parses, otherwise the underlying cell value. */
+function preferDisplay_(value, display, parser) {
+  if (typeof display === 'string' && display !== '' && parser(display)) {
+    return display;
+  }
+  return value;
 }
 
 function tz_() {
@@ -191,10 +230,29 @@ function parseDateCell_(value) {
   var iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (iso) return { y: Number(iso[1]), m: Number(iso[2]) - 1, d: Number(iso[3]) };
 
-  var us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);   // 8/11/2026
-  if (us) return { y: Number(us[3]), m: Number(us[1]) - 1, d: Number(us[2]) };
+  // 8/11/2026 and 8/11/26 — Sheets renders a date cell with whatever year width
+  // the column's format specifies, and a two-digit year is common.
+  var us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (us) {
+    return { y: expandYear_(us[3]), m: Number(us[1]) - 1, d: Number(us[2]) };
+  }
+
+  // Anything else the engine can read, e.g. "Aug 11, 2026". Last resort, so an
+  // unanticipated display format degrades to a correct answer rather than
+  // falling through to the raw cell value, whose timezone anchoring may differ.
+  var loose = new Date(s);
+  if (!isNaN(loose.getTime())) {
+    return { y: loose.getFullYear(), m: loose.getMonth(), d: loose.getDate() };
+  }
 
   return null;
+}
+
+/** Two-digit years: 00–68 are this century, 69–99 the last. */
+function expandYear_(text) {
+  var n = Number(text);
+  if (text.length === 4) return n;
+  return n < 69 ? 2000 + n : 1900 + n;
 }
 
 /**

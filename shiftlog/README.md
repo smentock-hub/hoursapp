@@ -160,8 +160,14 @@ copy kept only as a fallback for rows where `Date`/`Time` are blank.
 | `14:30:00` | the same, seconds optional |
 | `9:05 AM` | 9:05 am |
 
-`Date` accepts `2026-08-11` or `8/11/2026`, and Sheets' own date and time cell
-values work too. A blank `Time` means midnight.
+`Date` accepts `2026-08-11`, `8/11/2026`, `8/11/26` and written forms like
+`Aug 11, 2026`. A blank `Time` means midnight.
+
+Both columns are read from what Sheets *displays*, not from the underlying cell
+value, so what you see in the cell is what gets counted. A date or time typed
+into Sheets becomes a serial number whose `Date` form is anchored to the
+spreadsheet's timezone; reading that directly shifted hand-entered rows by hours
+and often onto the previous day.
 
 Rows are sorted chronologically before pairing, so a correction does **not**
 need to go in the right position — add it at the bottom and the totals still
@@ -177,7 +183,7 @@ task as currently running.
 ```sh
 cd test && npm install
 
-# backend logic against a fake Sheets environment (102 checks).
+# backend logic against a fake Sheets environment (111 checks).
 # Run it in the project timezone — week boundaries are local-time.
 TZ=America/Los_Angeles npm run test:backend
 

@@ -9,19 +9,34 @@ function makeEnv() {
   let header = null;
 
   const checkboxCells = [];        // [row, col] pairs given a checkbox
+  const displayOverrides = {};     // "rowIndex:colIndex" -> text Sheets would show
   let formatRules = [];
 
   const sheet = {
+    getName: () => 'Log',
+    getParent: () => ss,
     getLastRow: () => (header ? rows.length + 1 : 0),
     getMaxRows: () => 1000,
     setFrozenRows: () => {},
     getRange: (r, c, nr, nc) => {
+      // r is 1-based and includes the header, so data row i sits at r = i + 2.
+      const slice = () => rows.slice(r - 2, r - 2 + nr);
       const range = {
         setValues: (v) => { if (r === 1) header = v[0]; return range; },
         setFontWeight: () => range,
         setNumberFormat: () => range,
         insertCheckboxes: () => { checkboxCells.push([r, c]); return range; },
-        getValues: () => rows.slice(r - 2, r - 2 + nr).map((x) => x.slice(c - 1, c - 1 + nc)),
+        getValues: () => slice().map((x) => x.slice(c - 1, c - 1 + nc)),
+        // What Sheets would render on screen: the override if one is set for
+        // this cell, otherwise the value stringified.
+        getDisplayValues: () => slice().map((x, k) => {
+          const rowIdx = r - 2 + k;
+          return x.slice(c - 1, c - 1 + nc).map((cell, j) => {
+            const key = `${rowIdx}:${c - 1 + j}`;
+            if (key in displayOverrides) return displayOverrides[key];
+            return cell === null || cell === undefined ? '' : String(cell);
+          });
+        }),
       };
       return range;
     },
@@ -56,9 +71,13 @@ function makeEnv() {
   };
 
   const sheets = { Log: sheet, Weekly: weeklySheet };
+  let spreadsheetTz = 'Etc/GMT';        // as clasp creates it: not the script's zone
   const ss = {
     getSheetByName: (n) => sheets[n] || null,
     insertSheet: (n) => sheets[n] || sheet,
+    getSheets: () => [sheet, weeklySheet],
+    getSpreadsheetTimeZone: () => spreadsheetTz,
+    setSpreadsheetTimeZone: (t) => { spreadsheetTz = t; },
   };
 
   const props = {};
@@ -67,6 +86,9 @@ function makeEnv() {
     checkboxCells,
     getFormatRules: () => formatRules,
     getWeeklyGrid: () => weeklyGrid,
+    getSpreadsheetTz: () => spreadsheetTz,
+    setDisplay: (rowIdx, colIdx, text) => { displayOverrides[`${rowIdx}:${colIdx}`] = text; },
+    clearDisplays: () => { Object.keys(displayOverrides).forEach((k) => delete displayOverrides[k]); },
     clearWeeklyGrid: () => { weeklyGrid = []; },
     PropertiesService: {
       getScriptProperties: () => ({
@@ -313,6 +335,12 @@ timeForms.forEach(([label, text, h_, m_, s_]) => {
   check(label, [got.h, got.min, got.s], [h_, m_, s_]);
 });
 check('US-style date accepted', env.parseDateCell_('9/28/2026'), { y: 2026, m: 8, d: 28 });
+// Sheets renders a date cell using the column's format; a two-digit year is
+// common and used to fall through to the raw cell value, shifting the row.
+check('two-digit year accepted', env.parseDateCell_('8/10/26'), { y: 2026, m: 7, d: 10 });
+check('two-digit year at century edge', env.parseDateCell_('1/1/69'), { y: 1969, m: 0, d: 1 });
+check('two-digit year just inside', env.parseDateCell_('1/1/68'), { y: 2068, m: 0, d: 1 });
+check('written month accepted', env.parseDateCell_('Aug 10, 2026'), { y: 2026, m: 7, d: 10 });
 check('blank Time means midnight', env.parseTimeCell_(''), { h: 0, min: 0, s: 0 });
 check('unparseable Time rejected', env.parseTimeCell_('lunchtime'), null);
 
@@ -453,6 +481,44 @@ console.log('\n== editing a time in place is still noticed ==');
 env.rows[1][2] = '11:00:00';                        // 1h becomes 2h
 env.getSummary();
 check('edit triggers a rebuild', env.getWeeklyGrid()[1][2], 2);
+
+console.log('\n== hand-typed cells that Sheets stored in another timezone ==');
+// Reproduces the real failure: the spreadsheet was created in GMT while the
+// script runs in Pacific, so a typed "2026-08-11 / 08:30" came back as a Date
+// meaning 2026-08-11T00:00Z — which reads as Aug 10, 17:00 in the script's
+// zone, moving the entry to the previous day and shifting it eight hours.
+env.rows.length = 0;
+env.clearDisplays();
+env.rows.push([
+  '',
+  new RealDate('2026-08-11T00:00:00.000Z'),        // Date column, GMT-anchored
+  new RealDate('1899-12-30T08:30:00.000Z'),        // Time column, GMT-anchored
+  'notes', 'start', 'manual', '', '']);
+env.rows.push([
+  '',
+  new RealDate('2026-08-11T00:00:00.000Z'),
+  new RealDate('1899-12-30T10:30:00.000Z'),
+  'notes', 'stop', 'manual', '', '']);
+// What the user actually sees in those cells:
+env.setDisplay(0, 1, '2026-08-11'); env.setDisplay(0, 2, '08:30:00');
+env.setDisplay(1, 1, '2026-08-11'); env.setDisplay(1, 2, '10:30:00');
+
+at(local(2026, 8, 11, 12, 0));
+const shifted = env.getSummary();
+check('the 2h is counted, not lost', h(shifted.totals.notes), 2);
+
+const parsedStart = env.rowWhen_(env.getRows_()[0]);
+check('lands on the day shown in the cell', parsedStart.getDate(), 11);
+check('at the time shown in the cell', [parsedStart.getHours(), parsedStart.getMinutes()], [8, 30]);
+
+console.log('\n== the spreadsheet timezone is realigned to the script ==');
+check('mismatch corrected on schema upgrade', env.getSpreadsheetTz(), 'America/New_York');
+
+console.log('\n== an unrecognised display format falls back to the cell value ==');
+env.clearDisplays();
+env.setDisplay(0, 1, 'Tuesday, 11 August');        // nothing the parsers know
+env.setDisplay(1, 1, 'Tuesday, 11 August');
+check('still parses via the underlying value', env.rowWhen_(env.getRows_()[0]) !== null, true);
 
 console.log('\n== doGet routing ==');
 env.rows.length = 0;
