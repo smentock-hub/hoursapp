@@ -7,7 +7,8 @@
  */
 
 var SHEET_NAME = 'Log';
-var HEADERS = ['Timestamp', 'Date', 'Time', 'Task', 'Action', 'Source', 'Note'];
+var HEADERS = ['Timestamp', 'Date', 'Time', 'Task', 'Action', 'Source', 'Note',
+               'Verified'];
 var TASKS = ['clinic', 'lunch', 'notes', 'inbox', 'forms', 'meeting'];
 var AUTO_STOP_HOURS = 6;
 
@@ -19,6 +20,14 @@ var C_TASK = 3;
 var C_ACTION = 4;
 var C_SOURCE = 5;
 var C_NOTE = 6;
+var C_VERIFIED = 7;
+
+var SAFETY_SOURCE = 'auto-safety';
+var FLAG_COLOR = '#F7E0C3';        // warm amber, in key with the app's palette
+
+// Bumped when the sheet's headers or formatting rules change, so an existing
+// sheet is upgraded once rather than re-checked on every request.
+var SCHEMA_VERSION = '2';
 
 var AUTO_STOP_NOTE = 'Auto-stopped after ' + AUTO_STOP_HOURS +
     'h — review, may be inaccurate.';
@@ -85,7 +94,38 @@ function getSheet_() {
     // reinterpret them into its own locale formatting.
     sheet.getRange(1, 1, sheet.getMaxRows(), 3).setNumberFormat('@');
   }
+  ensureSchema_(sheet);
   return sheet;
+}
+
+var schemaCheckedThisRun_ = false;
+
+/**
+ * Brings an existing sheet up to the current schema: the Verified header, and a
+ * conditional-format rule that shades any unverified auto-safety row.
+ *
+ * The rule is deliberately conditional formatting rather than a painted
+ * background, so the shading clears itself the moment the Verified box is
+ * ticked — no rewriting of past rows, and nothing to run on a schedule.
+ */
+function ensureSchema_(sheet) {
+  if (schemaCheckedThisRun_) return;
+  schemaCheckedThisRun_ = true;
+
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('schemaVersion') === SCHEMA_VERSION) return;
+
+  sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]).setFontWeight('bold');
+
+  var flagRange = sheet.getRange(2, 1, sheet.getMaxRows() - 1, HEADERS.length);
+  var rule = SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=AND($F2="' + SAFETY_SOURCE + '", $H2<>TRUE)')
+      .setBackground(FLAG_COLOR)
+      .setRanges([flagRange])
+      .build();
+  sheet.setConditionalFormatRules([rule]);
+
+  props.setProperty('schemaVersion', SCHEMA_VERSION);
 }
 
 /** All data rows (header excluded), oldest first. */
@@ -213,8 +253,19 @@ function appendRow_(when, task, action, source, note) {
     task || '',
     action,
     source || '',
-    note || ''
+    note || '',
+    ''
   ]);
+  // Give rows that need a human decision something to tick. Ordinary rows keep
+  // the column empty so the sheet is not a wall of checkboxes.
+  if (source === SAFETY_SOURCE) {
+    sheet.getRange(sheet.getLastRow(), C_VERIFIED + 1).insertCheckboxes();
+  }
+}
+
+/** A ticked Verified box — Sheets stores it as a real boolean. */
+function isVerified_(value) {
+  return value === true || String(value).toLowerCase() === 'true';
 }
 
 /**
@@ -395,7 +446,8 @@ function getSummary() {
         addHours_(totals, open.task, open.start, when, week);
         open = null;
       }
-      if (source === 'auto-safety' &&
+      if (source === SAFETY_SOURCE &&
+          !isVerified_(row[C_VERIFIED]) &&
           when.getTime() >= week.start.getTime() &&
           when.getTime() <= week.end.getTime()) {
         flagged.push({

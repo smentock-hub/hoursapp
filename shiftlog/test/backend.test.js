@@ -8,24 +8,54 @@ function makeEnv() {
   const rows = [];       // data rows only
   let header = null;
 
+  const checkboxCells = [];        // [row, col] pairs given a checkbox
+  let formatRules = [];
+
   const sheet = {
     getLastRow: () => (header ? rows.length + 1 : 0),
     getMaxRows: () => 1000,
     setFrozenRows: () => {},
-    getRange: (r, c, nr, nc) => ({
-      setValues: (v) => { if (r === 1) header = v[0]; },
-      setFontWeight: () => {},
-      setNumberFormat: () => {},
-      getValues: () => rows.slice(r - 2, r - 2 + nr).map((x) => x.slice(c - 1, c - 1 + nc)),
-    }),
+    getRange: (r, c, nr, nc) => {
+      const range = {
+        setValues: (v) => { if (r === 1) header = v[0]; return range; },
+        setFontWeight: () => range,
+        setNumberFormat: () => range,
+        insertCheckboxes: () => { checkboxCells.push([r, c]); return range; },
+        getValues: () => rows.slice(r - 2, r - 2 + nr).map((x) => x.slice(c - 1, c - 1 + nc)),
+      };
+      return range;
+    },
     appendRow: (row) => rows.push(row),
+    setConditionalFormatRules: (r) => { formatRules = r; },
+    getConditionalFormatRules: () => formatRules,
   };
 
   const ss = { getSheetByName: (n) => (n === 'Log' ? sheet : null), insertSheet: () => sheet };
 
+  const props = {};
   const sandbox = {
     rows,
-    SpreadsheetApp: { getActiveSpreadsheet: () => ss },
+    checkboxCells,
+    getFormatRules: () => formatRules,
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (k) => (k in props ? props[k] : null),
+        setProperty: (k, v) => { props[k] = v; },
+      }),
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => ss,
+      newConditionalFormatRule: () => {
+        const spec = {};
+        const b = {
+          whenFormulaSatisfied: (f) => { spec.formula = f; return b; },
+          setBackground: (c) => { spec.background = c; return b; },
+          setRanges: (r) => { spec.ranges = r; return b; },
+          build: () => spec,
+        };
+        return b;
+      },
+    },
     Session: { getScriptTimeZone: () => 'America/New_York' },
     LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     ContentService: {
@@ -185,6 +215,43 @@ formats.forEach(([label, text, expected]) => {
 });
 check('blank cell is ignored', env.parseTs_(''), null);
 check('garbage is ignored', env.parseTs_('sometime tuesday'), null);
+
+console.log('\n== forgotten timers are marked for review in the sheet ==');
+env.rows.length = 0;
+env.checkboxCells.length = 0;
+at(local(2026, 10, 5, 9, 0)); env.logEvent('clinic', 'start', 'nfc', '');
+at(local(2026, 10, 5, 16, 0));                       // 7h later, forgot to stop
+env.checkAutoStop();
+const flagRow = env.rows[env.rows.length - 1];
+check('a stop row was written', flagRow[4], 'stop');
+check('source marks it auto-safety', flagRow[5], 'auto-safety');
+check('note explains why', /review/i.test(flagRow[6]), true);
+check('row got a Verified checkbox', env.checkboxCells.length, 1);
+check('checkbox is in column H', env.checkboxCells[0][1], 8);
+check('ordinary rows get no checkbox',
+      env.rows.filter((r) => r[5] !== 'auto-safety').length > 0 &&
+      env.checkboxCells.length === 1, true);
+
+const rules = env.getFormatRules();
+check('a shading rule exists', rules.length, 1);
+check('rule targets unverified auto-safety rows', rules[0].formula,
+      '=AND($F2="auto-safety", $H2<>TRUE)');
+check('rule shades amber', rules[0].background, '#F7E0C3');
+
+at(local(2026, 10, 5, 17, 0));
+let flagSummary = env.getSummary();
+check('app flags it for review', flagSummary.flagged.length, 1);
+check('flagged names the task', flagSummary.flagged[0].task, 'clinic');
+
+console.log('\n== ticking Verified clears the flag ==');
+env.rows[env.rows.length - 1][7] = true;
+flagSummary = env.getSummary();
+check('no longer flagged', flagSummary.flagged.length, 0);
+check('but the hours are untouched', h(flagSummary.totals.clinic), 7);
+env.rows[env.rows.length - 1][7] = 'TRUE';           // text form, as CSV import gives
+check('text TRUE also counts as verified', env.getSummary().flagged.length, 0);
+env.rows[env.rows.length - 1][7] = false;
+check('unticking flags it again', env.getSummary().flagged.length, 1);
 
 console.log('\n== the readable Date/Time columns are what count ==');
 env.rows.length = 0;

@@ -23,9 +23,16 @@ other phone or tablet.
 - Tap a tile to start it. Tapping the running tile stops it.
 - Only one task runs at a time: starting a new one **auto-stops** the previous
   one at the same instant, logged with source `auto-switch`.
-- A task left running for **6 hours** is auto-stopped with source `auto-safety`
-  and listed under "Needs review" in the app, since the real stop was probably
-  earlier and the logged time is likely an overestimate.
+- A task left running for **6 hours** is auto-stopped with source `auto-safety`,
+  since the real stop was probably earlier and the logged time is likely an
+  overestimate. Such a row is **shaded amber in the sheet**, carries a
+  `Verified` checkbox, and is listed under "Needs review" in the app. Correct
+  its `Time`, then tick `Verified`: the shading clears and it drops out of the
+  app's review list. The hours themselves are never altered by ticking it.
+
+  The shading is a conditional-format rule (`Source` is `auto-safety` and
+  `Verified` is not `TRUE`), set up once, so it maintains itself without any
+  rewriting of past rows.
 - The weekly summary covers **Monday 00:00 – Sunday 23:59** in the project
   timezone (`America/Los_Angeles`). Sessions that cross midnight into a new week
   are split at the boundary.
@@ -58,7 +65,7 @@ app also refreshes the summary every 60s while open.
 
 ## Sheet columns
 
-`Timestamp` · `Date` · `Time` · `Task` · `Action` · `Source` · `Note`
+`Timestamp` · `Date` · `Time` · `Task` · `Action` · `Source` · `Note` · `Verified`
 
 The `Log` tab and its header row are created automatically on first write.
 
@@ -97,7 +104,7 @@ task as currently running.
 ```sh
 cd test && npm install
 
-# backend logic against a fake Sheets environment (68 checks).
+# backend logic against a fake Sheets environment (76 checks).
 # Run it in the project timezone — week boundaries are local-time.
 TZ=America/Los_Angeles npm run test:backend
 
