@@ -82,6 +82,16 @@ automation fired, not when you walked out. If nothing is running the stop
 writes no row at all, so a spurious trigger is harmless, and the 6h auto-stop
 remains the backstop for a day the automation misses entirely.
 
+**Starting the clinic day on arrival:** the same recipe with an **Arrive**
+trigger and a start URL. Constrain it to working days and hours in the
+automation itself (**Time Range**, and the day-of-week selector), or a Sunday
+errand near the building opens a Clinic entry.
+
+Arriving while a different task is running switches to Clinic and closes the
+other one, which is usually what returning to the building means. Arriving when
+Clinic is already running does nothing, so re-entering the geofence through the
+day is harmless.
+
 **Triggering a start by hand:** the same shortcut can be added to the Home
 Screen (Share → Add to Home Screen), bound to **Back Tap** (Settings →
 Accessibility → Touch → Back Tap), or put on the Action button. For all six
