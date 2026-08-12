@@ -1,0 +1,14 @@
+{
+  "name": "shiftlog-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Test suites for Shift Log: Apps Script backend logic and the PWA frontend.",
+  "scripts": {
+    "test:backend": "node backend.test.js",
+    "test:ui": "node uitest.js",
+    "serve": "node mockserver.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

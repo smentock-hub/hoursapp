@@ -65,18 +65,36 @@ The `Log` tab and its header row are created automatically on first write.
 ## Development
 
 ```sh
-# backend logic, against a fake Sheets environment (31 checks)
-cd apps-script && TZ=America/Los_Angeles node test_code.js
+cd test && npm install
 
-# frontend, in a real browser against a mock backend (31 checks)
-cd test && node mockserver.js &          # serves ../web plus a stand-in /exec
-node uitest.js
+# backend logic against a fake Sheets environment (31 checks).
+# Run it in the project timezone — week boundaries are local-time.
+TZ=America/Los_Angeles npm run test:backend
 
-# deploy
+# frontend in a real browser against a mock backend (31 checks).
+npm run serve &                  # serves ../web plus a stand-in /exec on :8099
+npm run test:ui                  # set CHROMIUM_PATH to reuse an existing browser
+```
+
+Deploying:
+
+```sh
 cd apps-script && clasp push && clasp deploy --description "vN"
 cd web && wrangler pages deploy . --project-name=shift-log --branch main
 ```
 
+`clasp deploy` mints a **new** deployment id and therefore a new `/exec` URL. To
+keep the URL already saved on the phone and written to NFC tags, update the
+existing deployment in place instead:
+
+```sh
+clasp redeploy AKfycbzeAjV9VK4Hw9OOpqyR3Ocgco8kD9NheWVtIKmbTgDOJz1AnRvZN6WTSYci7wChkwGcSQ --description "vN"
+```
+
+Note that `clasp create` overwrites `appsscript.json` with a default manifest —
+if you ever recreate the project, restore the `timeZone` and `webapp` blocks
+before pushing, or the web app redeploys without anonymous access.
+
 Changing the timezone means editing `apps-script/appsscript.json` **and**
-re-running `clasp push` + `clasp deploy` — week boundaries are computed
+re-running `clasp push` plus a redeploy — week boundaries are computed
 server-side.

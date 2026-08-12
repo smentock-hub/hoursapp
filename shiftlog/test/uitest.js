@@ -11,7 +11,10 @@ function ok(label, cond, extra) {
 
 (async () => {
   const browser = await chromium.launch({
-    executablePath: '/opt/pw-browsers/chromium',
+    // Set CHROMIUM_PATH to reuse a preinstalled browser instead of Playwright's
+    // own download; --no-proxy-server keeps a corporate/agent proxy out of the
+    // way, since every request here is to localhost.
+    ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
     args: ['--no-sandbox', '--no-proxy-server'],
   });
   const ctx = await browser.newContext({ ...devices['iPhone 13'] });
