@@ -430,7 +430,7 @@ input:focus { border-color: var(--clinic); }
   <div class="dot"></div>
   <div class="label">
     <div class="what" id="bannerWhat">Nothing running</div>
-    <div class="since" id="bannerSince">Tap a card below to start tracking</div>
+    <div class="since" id="bannerSince"></div>
   </div>
   <div class="elapsed" id="bannerElapsed">0:00</div>
 </div>
@@ -545,7 +545,7 @@ input:focus { border-color: var(--clinic); }
       b.className = 'tile';
       b.style.setProperty('--c', t.color);
       b.dataset.task = t.id;
-      b.innerHTML = '<div class="name"></div><div class="state">Tap to start</div>';
+      b.innerHTML = '<div class="name"></div><div class="state"></div>';
       b.querySelector('.name').textContent = t.name;
       b.addEventListener('click', function () { onTileTap(t.id); });
       grid.appendChild(b);
@@ -573,7 +573,7 @@ input:focus { border-color: var(--clinic); }
       banner.classList.remove('running');
       banner.style.removeProperty('--accent');
       $('bannerWhat').textContent = 'Nothing running';
-      $('bannerSince').textContent = 'Tap a card below to start tracking';
+      $('bannerSince').textContent = '';
       return;
     }
     var t = BY_ID[state.active.task];
@@ -590,9 +590,8 @@ input:focus { border-color: var(--clinic); }
       var isActive = tile.dataset.task === activeId;
       tile.classList.toggle('active', isActive);
       if (!isActive) {
-        var hours = state.totals[tile.dataset.task] || 0;
         tile.querySelector('.state').textContent =
-          hours > 0 ? hoursLabel(hours) + ' this week' : 'Tap to start';
+          hoursLabel(state.totals[tile.dataset.task] || 0) + ' this week';
       }
     });
   }
@@ -608,13 +607,19 @@ input:focus { border-color: var(--clinic); }
   }
 
   function renderSummary() {
+    // Scale bars off whole minutes, the same unit the labels show, so a bar is
+    // never full next to a "0h 00m" label.
+    var mins = {};
     var max = 0;
-    TASKS.forEach(function (t) { max = Math.max(max, state.totals[t.id] || 0); });
+    TASKS.forEach(function (t) {
+      mins[t.id] = Math.round((state.totals[t.id] || 0) * 60);
+      max = Math.max(max, mins[t.id]);
+    });
 
     TASKS.forEach(function (t) {
-      var hours = state.totals[t.id] || 0;
-      document.querySelector('[data-val="' + t.id + '"]').textContent = hoursLabel(hours);
-      var pct = max > 0 ? (hours / max) * 100 : 0;
+      document.querySelector('[data-val="' + t.id + '"]').textContent =
+        hoursLabel(state.totals[t.id] || 0);
+      var pct = max > 0 ? (mins[t.id] / max) * 100 : 0;
       document.querySelector('[data-fill="' + t.id + '"]').style.width = pct + '%';
     });
     $('totalHours').textContent = hoursLabel(state.totalHours);

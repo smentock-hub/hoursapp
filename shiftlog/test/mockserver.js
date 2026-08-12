@@ -69,6 +69,10 @@ const server = http.createServer((req, res) => {
     Object.keys(totals).forEach((k) => (totals[k] = 0));
     res.writeHead(200); return res.end('reset');
   }
+  if (u.pathname === '/__tiny') {
+    totals.clinic = 0.001; totals.notes = 0.001;
+    res.writeHead(200); return res.end('tiny');
+  }
   // Preload fixture data so the summary card and flagged card have content.
   if (u.pathname === '/__seed') {
     totals.clinic = 12.5; totals.lunch = 2.25; totals.notes = 4.1;
