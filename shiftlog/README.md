@@ -57,6 +57,37 @@ Links follow this shape:
 `source` is recorded in the sheet, so you can tell later which entries came from
 a tag, a location trigger, a tap in the app, or an automatic stop.
 
+## iPhone Shortcuts
+
+`source` is free text, so give each trigger its own label (`shortcut`,
+`leave-work`, `arrive-work`) and the Log records how every entry got there.
+
+**A shortcut that calls the app:** Shortcuts → **+** → add **Get Contents of
+URL** → paste one of the links below → Method **GET**. Use *Get Contents of URL*,
+not *Open URLs*: it runs silently instead of launching Safari.
+
+```
+https://script.google.com/macros/s/AKfycbzeAjV9VK4Hw9OOpqyR3Ocgco8kD9NheWVtIKmbTgDOJz1AnRvZN6WTSYci7wChkwGcSQ/exec?action=start&task=clinic&source=shortcut
+https://script.google.com/macros/s/AKfycbzeAjV9VK4Hw9OOpqyR3Ocgco8kD9NheWVtIKmbTgDOJz1AnRvZN6WTSYci7wChkwGcSQ/exec?action=stop&source=leave-work
+```
+
+**Stopping automatically when leaving work:** Shortcuts → **Automation** →
+**+** → **Leave** → pick the work address → **Next** → **Run Shortcut** → choose
+the stop shortcut. Then turn on **Run Immediately** and turn off **Ask Before
+Running**, or it will sit waiting for a tap and never fire in your pocket.
+Location automations need Location Services set to **Always**.
+
+The geofence can lag by a few minutes, so the recorded stop is when the
+automation fired, not when you walked out. If nothing is running the stop
+writes no row at all, so a spurious trigger is harmless, and the 6h auto-stop
+remains the backstop for a day the automation misses entirely.
+
+**Triggering a start by hand:** the same shortcut can be added to the Home
+Screen (Share → Add to Home Screen), bound to **Back Tap** (Settings →
+Accessibility → Touch → Back Tap), or put on the Action button. For all six
+tasks in one shortcut, use a **Choose from Menu** action with a *Get Contents of
+URL* under each branch.
+
 ## Offline
 
 Taps made without a connection are queued in `localStorage`, replayed when the
