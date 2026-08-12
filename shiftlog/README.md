@@ -67,34 +67,26 @@ The `Log` tab and its header row are created automatically on first write.
 Edit the sheet directly — every total is recomputed from these rows on each
 request, so there is no cached state to invalidate.
 
-**`Timestamp` is the only column the math reads.** `Date` and `Time` are
-human-readable copies kept for scanning the log; changing them alone does
-nothing. The app writes local ISO-8601 with an explicit offset:
+**Edit the `Date` and `Time` columns. Ignore `Timestamp`.** Those two readable
+columns are what the totals are computed from; `Timestamp` is a machine-format
+copy kept only as a fallback for rows where `Date`/`Time` are blank.
 
-```
-2026-08-11T16:50:14-07:00
-└──┬───┘ ┬ └──┬───┘└──┬──┘
-   │     │    │       └─ offset from UTC (-07:00 = Pacific Daylight Time)
-   │     │    └───────── 24-hour clock: 16:50:14 is 4:50:14 pm
-   │     └────────────── separator between the date and the time
-   └──────────────────── year-month-day
-```
-
-When correcting a row you can type any of these instead — all are read as
-project-local time unless they carry their own offset:
+`Time` accepts whatever is natural to type:
 
 | You type | Means |
 | --- | --- |
-| `2026-08-11 16:50:00` | 4:50 pm local |
-| `2026-08-11 16:50` | same; seconds optional |
-| `2026-08-11T16:50:00` | same; `T` or a space both work |
-| `2026-08-11` | midnight local |
-| `2026-08-11T23:50:14.280Z` | UTC (the `Z`), which older rows use |
+| `2:30 PM` | 2:30 pm |
+| `14:30` | the same, 24-hour |
+| `14:30:00` | the same, seconds optional |
+| `9:05 AM` | 9:05 am |
 
-Rows are sorted by `Timestamp` before pairing, so a correction does **not**
-need to be inserted in the right position — put it anywhere and the totals
-come out right. Two rows sharing a timestamp keep their sheet order, which is
-what makes an auto-switch's stop-then-start pair unambiguous.
+`Date` accepts `2026-08-11` or `8/11/2026`, and Sheets' own date and time cell
+values work too. A blank `Time` means midnight.
+
+Rows are sorted chronologically before pairing, so a correction does **not**
+need to go in the right position — add it at the bottom and the totals still
+come out right. Two rows sharing a time keep their sheet order, which is what
+makes an auto-switch's stop-then-start pair unambiguous.
 
 Two rules still apply: `start` and `stop` must alternate for a task to be
 paired, and if the chronologically last row is a `start`, the app treats that
@@ -105,7 +97,7 @@ task as currently running.
 ```sh
 cd test && npm install
 
-# backend logic against a fake Sheets environment (31 checks).
+# backend logic against a fake Sheets environment (68 checks).
 # Run it in the project timezone — week boundaries are local-time.
 TZ=America/Los_Angeles npm run test:backend
 

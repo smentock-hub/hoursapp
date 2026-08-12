@@ -100,9 +100,16 @@ function tz_() {
   return Session.getScriptTimeZone();
 }
 
+/** Duck-typed, so a Date from another realm is still recognised. */
+function isDate_(value) {
+  return !!value && typeof value.getTime === 'function' &&
+      typeof value.getFullYear === 'function' && !isNaN(value.getTime());
+}
+
 /**
- * Rows may hold a Date (Sheets converted it) or a string. Hand-edited cells are
- * accepted in the forgiving forms a person would actually type:
+ * The machine-format Timestamp column. Rows may hold a Date (Sheets converted
+ * it) or a string; hand-edited cells are accepted in the forgiving forms a
+ * person would actually type:
  *
  *   2026-08-11T16:50:14-07:00   written by the app
  *   2026-08-11T23:50:14.280Z    UTC, written by older versions
@@ -115,7 +122,7 @@ function tz_() {
  * offset-less strings varies.
  */
 function parseTs_(value) {
-  if (value instanceof Date) return value;
+  if (isDate_(value)) return value;
   if (value === '' || value === null || value === undefined) return null;
 
   var s = String(value).trim();
@@ -127,6 +134,67 @@ function parseTs_(value) {
 
   var d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Y/M/D from the Date column. Sheets often converts that cell into a real date
+ * value, so accept a Date as readily as text like "2026-08-11" or "8/11/2026".
+ */
+function parseDateCell_(value) {
+  if (isDate_(value)) {
+    return { y: value.getFullYear(), m: value.getMonth(), d: value.getDate() };
+  }
+  var s = String(value === null || value === undefined ? '' : value).trim();
+  if (!s) return null;
+
+  var iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) return { y: Number(iso[1]), m: Number(iso[2]) - 1, d: Number(iso[3]) };
+
+  var us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);   // 8/11/2026
+  if (us) return { y: Number(us[3]), m: Number(us[1]) - 1, d: Number(us[2]) };
+
+  return null;
+}
+
+/**
+ * H/M/S from the Time column. A time-only cell comes back as a Date pinned to
+ * 1899-12-30, so read its clock fields; otherwise accept "16:50", "16:50:14",
+ * or "4:50 PM".
+ */
+function parseTimeCell_(value) {
+  if (isDate_(value)) {
+    return { h: value.getHours(), min: value.getMinutes(), s: value.getSeconds() };
+  }
+  var str = String(value === null || value === undefined ? '' : value).trim();
+  if (!str) return { h: 0, min: 0, s: 0 };
+
+  var m = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?$/);
+  if (!m) return null;
+
+  var h = Number(m[1]);
+  if (m[4]) {                                   // 12-hour clock
+    var pm = /[Pp]/.test(m[4]);
+    if (h === 12) h = pm ? 12 : 0;
+    else if (pm) h += 12;
+  }
+  return { h: h, min: Number(m[2]), s: Number(m[3] || 0) };
+}
+
+/**
+ * When a row happened.
+ *
+ * The readable Date and Time columns win, because those are what a person
+ * edits; the machine-format Timestamp is only the fallback for rows where they
+ * are missing or unparseable. Editing Time alone therefore does what it looks
+ * like it does.
+ */
+function rowWhen_(row) {
+  var day = parseDateCell_(row[C_DATE]);
+  if (day) {
+    var clock = parseTimeCell_(row[C_TIME]);
+    if (clock) return new Date(day.y, day.m, day.d, clock.h, clock.min, clock.s, 0);
+  }
+  return parseTs_(row[C_TIMESTAMP]);
 }
 
 /** Local ISO-8601 with an explicit offset, e.g. 2026-08-11T16:50:14-07:00. */
@@ -158,7 +226,7 @@ function sortedRows_() {
   var rows = getRows_();
   var out = [];
   for (var i = 0; i < rows.length; i++) {
-    var when = parseTs_(rows[i][C_TIMESTAMP]);
+    var when = rowWhen_(rows[i]);
     if (when) out.push({ row: rows[i], when: when, i: i });
   }
   out.sort(function (a, b) {

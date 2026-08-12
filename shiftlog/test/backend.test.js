@@ -186,6 +186,45 @@ formats.forEach(([label, text, expected]) => {
 check('blank cell is ignored', env.parseTs_(''), null);
 check('garbage is ignored', env.parseTs_('sometime tuesday'), null);
 
+console.log('\n== the readable Date/Time columns are what count ==');
+env.rows.length = 0;
+// Timestamp says 09:00 but the Time column says 10:00 — the human edit wins.
+env.rows.push(['2026-09-28T09:00:00-07:00', '2026-09-28', '10:00:00', 'clinic', 'start', 'manual', '']);
+env.rows.push(['2026-09-28T09:00:00-07:00', '2026-09-28', '12:00:00', 'clinic', 'stop', 'manual', '']);
+at(local(2026, 9, 28, 13, 0));
+check('edited Time drives the total', h(env.getSummary().totals.clinic), 2);
+
+console.log('\n== Date/Time cells that Sheets converted to real values ==');
+env.rows.length = 0;
+env.rows.push(['', local(2026, 9, 28, 0, 0), new RealDate(1899, 11, 30, 9, 0, 0), 'notes', 'start', 'manual', '']);
+env.rows.push(['', local(2026, 9, 28, 0, 0), new RealDate(1899, 11, 30, 11, 30, 0), 'notes', 'stop', 'manual', '']);
+at(local(2026, 9, 28, 13, 0));
+check('date/time objects total 2.5h', h(env.getSummary().totals.notes), 2.5);
+
+console.log('\n== other things a person might type into Time ==');
+const timeForms = [
+  ['24h with seconds', '14:30:00', 14, 30, 0],
+  ['24h no seconds',   '14:30',    14, 30, 0],
+  ['12-hour pm',       '2:30 PM',  14, 30, 0],
+  ['12-hour am',       '9:05 AM',   9,  5, 0],
+  ['midnight 12 AM',   '12:00 AM',  0,  0, 0],
+  ['noon 12 PM',       '12:00 PM', 12,  0, 0],
+];
+timeForms.forEach(([label, text, h_, m_, s_]) => {
+  const got = env.parseTimeCell_(text);
+  check(label, [got.h, got.min, got.s], [h_, m_, s_]);
+});
+check('US-style date accepted', env.parseDateCell_('9/28/2026'), { y: 2026, m: 8, d: 28 });
+check('blank Time means midnight', env.parseTimeCell_(''), { h: 0, min: 0, s: 0 });
+check('unparseable Time rejected', env.parseTimeCell_('lunchtime'), null);
+
+console.log('\n== a row with only Timestamp still works ==');
+env.rows.length = 0;
+env.rows.push(['2026-09-28T09:00:00-07:00', '', '', 'forms', 'start', 'manual', '']);
+env.rows.push(['2026-09-28T10:00:00-07:00', '', '', 'forms', 'stop', 'manual', '']);
+at(local(2026, 9, 28, 13, 0));
+check('falls back to Timestamp', h(env.getSummary().totals.forms), 1);
+
 console.log('\n== rows entered out of order are still paired correctly ==');
 env.rows.length = 0;
 // Deliberately append the stop above the start, as a hand-edit would.
