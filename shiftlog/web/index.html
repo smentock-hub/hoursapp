@@ -140,16 +140,16 @@ h1 {
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 14px;
+  margin-bottom: 18px;
 }
 .tile {
   position: relative;
   border-radius: var(--radius);
   background: var(--c);
   color: #fff;
-  min-height: 108px;
-  padding: 16px;
+  min-height: 148px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -161,26 +161,27 @@ h1 {
 }
 .tile:active { transform: scale(.97); filter: brightness(.95); }
 .tile .name {
-  font-size: 17px;
+  font-size: 21px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 .tile .state {
-  font-size: 13px;
-  opacity: .82;
+  font-size: 17px;
+  opacity: .85;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .tile.active .state {
-  font-size: 19px;
-  font-weight: 600;
+  font-size: 26px;
+  font-weight: 650;
   opacity: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 /* "breathing" inset ring on the running tile */
 .tile.active::after {
   content: "";
   position: absolute;
-  inset: 5px;
+  inset: 6px;
   border-radius: 15px;
   border: 2px solid rgba(255, 255, 255, .85);
   animation: breathe 2.8s ease-in-out infinite;
@@ -208,48 +209,29 @@ h1 {
 }
 .card .sub { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
 
-.rows { margin-top: 16px; }
-.row { margin-bottom: 13px; }
-.row:last-child { margin-bottom: 0; }
-.row .top {
+.weektotal {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: baseline;
-  font-size: 13px;
-  margin-bottom: 5px;
+  gap: 12px;
+  padding: 16px 18px;
 }
-.row .top .n { font-weight: 550; }
-.row .top .v { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.track {
-  height: 8px;
-  border-radius: 99px;
-  background: #EFEAE4;
-  overflow: hidden;
-}
-.fill {
-  height: 100%;
-  border-radius: 99px;
-  background: var(--c);
-  width: 0;
-  transition: width .45s cubic-bezier(.4, 0, .2, 1);
-}
-.total {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-  font-size: 15px;
+.wt-label { display: flex; flex-direction: column; min-width: 0; }
+.wt-label > span:first-child { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+.wt-range { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+.wt-value {
+  font-size: 22px;
   font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  flex: none;
 }
-.total .v { font-variant-numeric: tabular-nums; }
 
-/* Shown in place of the bars when there is nothing trustworthy to draw. */
-.problem { display: none; padding: 18px 0 4px; }
-.problem.show { display: block; }
+/* Shown instead of the total when there is nothing trustworthy to show. */
+#weekProblem { display: none; }
+#weekProblem.show { display: block; }
 .problem-text { font-size: 14px; line-height: 1.5; color: var(--ink-soft); }
-.problem .btn { margin-top: 14px; }
+#weekProblem .btn { margin-top: 14px; }
 #weekBody.hide { display: none; }
 
 #flaggedCard { display: none; }
@@ -444,20 +426,17 @@ input:focus { border-color: var(--clinic); }
 
 <div class="grid" id="grid"></div>
 
-<div class="card">
-  <h2>This week</h2>
-  <div class="sub" id="weekRange">Mon–Sun</div>
-  <div id="weekProblem" class="problem">
-    <div class="problem-text" id="weekProblemText"></div>
-    <button class="btn" id="weekProblemBtn">Open settings</button>
+<div class="card weektotal" id="weekBody">
+  <div class="wt-label">
+    <span>This week</span>
+    <span class="wt-range" id="weekRange">Mon–Sun</span>
   </div>
-  <div id="weekBody">
-    <div class="rows" id="summaryRows"></div>
-    <div class="total">
-      <span>Total</span>
-      <span class="v" id="totalHours">0h 00m</span>
-    </div>
-  </div>
+  <span class="wt-value" id="totalHours">0h 00m</span>
+</div>
+
+<div class="card" id="weekProblem">
+  <div class="problem-text" id="weekProblemText"></div>
+  <button class="btn" id="weekProblemBtn">Open settings</button>
 </div>
 
 <div class="card" id="flaggedCard">
@@ -568,21 +547,6 @@ input:focus { border-color: var(--clinic); }
     });
   }
 
-  function buildSummaryRows() {
-    var wrap = $('summaryRows');
-    TASKS.forEach(function (t) {
-      var row = document.createElement('div');
-      row.className = 'row';
-      row.style.setProperty('--c', t.color);
-      row.innerHTML =
-        '<div class="top"><span class="n"></span><span class="v">0h 00m</span></div>' +
-        '<div class="track"><div class="fill" data-fill="' + t.id + '"></div></div>';
-      row.querySelector('.n').textContent = t.name;
-      row.querySelector('.v').dataset.val = t.id;
-      wrap.appendChild(row);
-    });
-  }
-
   function renderBanner() {
     var banner = $('banner');
     if (!state.active) {
@@ -611,8 +575,10 @@ input:focus { border-color: var(--clinic); }
       var isActive = tile.dataset.task === activeId;
       tile.classList.toggle('active', isActive);
       if (!isActive) {
+        // Just the figure: the strip below the grid names the period, and
+        // "Nh NNm this week" wraps to two lines at this tile size.
         tile.querySelector('.state').textContent =
-          hoursLabel(state.totals[tile.dataset.task] || 0) + ' this week';
+          hoursLabel(state.totals[tile.dataset.task] || 0);
       }
     });
   }
@@ -627,22 +593,8 @@ input:focus { border-color: var(--clinic); }
     if (tile) tile.textContent = text;
   }
 
+  // Per-task hours live on the tiles; only the week's total needs a home here.
   function renderSummary() {
-    // Scale bars off whole minutes, the same unit the labels show, so a bar is
-    // never full next to a "0h 00m" label.
-    var mins = {};
-    var max = 0;
-    TASKS.forEach(function (t) {
-      mins[t.id] = Math.round((state.totals[t.id] || 0) * 60);
-      max = Math.max(max, mins[t.id]);
-    });
-
-    TASKS.forEach(function (t) {
-      document.querySelector('[data-val="' + t.id + '"]').textContent =
-        hoursLabel(state.totals[t.id] || 0);
-      var pct = max > 0 ? (mins[t.id] / max) * 100 : 0;
-      document.querySelector('[data-fill="' + t.id + '"]').style.width = pct + '%';
-    });
     $('totalHours').textContent = hoursLabel(state.totalHours);
 
     if (state.weekStart && state.weekEnd) {
@@ -930,7 +882,6 @@ input:focus { border-color: var(--clinic); }
     });
 
     buildGrid();
-    buildSummaryRows();
     renderAll();
     renderLinks();
 

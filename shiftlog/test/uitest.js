@@ -68,18 +68,25 @@ function ok(label, cond, extra) {
   ok('idle banner', (await page.locator('#bannerWhat').textContent()).trim() === 'Nothing running');
   ok('total hours rendered', (await page.locator('#totalHours').textContent()).trim() === '24h 06m',
      await page.locator('#totalHours').textContent());
-  ok('connected: the bars are shown', await page.locator('#weekBody.hide').count() === 0);
+  ok('connected: the total is shown', await page.locator('#weekBody.hide').count() === 0);
   ok('connected: no problem notice', await page.locator('#weekProblem.show').count() === 0);
   ok('flagged card visible when entries exist',
      await page.locator('#flaggedCard.show').count() === 1);
   ok('flagged mentions review',
      (await page.locator('#flaggedCard .sub').textContent()).includes('overestimate'));
 
-  // bar widths are proportional to the largest task
-  const w = await page.locator('[data-fill="clinic"]').evaluate((e) => e.style.width);
-  const w2 = await page.locator('[data-fill="lunch"]').evaluate((e) => e.style.width);
-  ok('largest bar is full width', w === '100%', w);
-  ok('smaller bar is proportional', parseFloat(w2) > 0 && parseFloat(w2) < 100, w2);
+  ok('no weekly bar table remains', await page.locator('[data-fill]').count() === 0);
+  const tileTexts = await page.locator('.tile .state').allTextContents();
+  ok('every tile carries its own weekly hours',
+     tileTexts.filter((t) => /^\d+h \d{2}m$/.test(t.trim())).length === 6,
+     tileTexts.join(' / '));
+  // Wrapping to a second line was why the label was trimmed to the figure.
+  const stateBox = await page.locator('.tile[data-task="lunch"] .state').boundingBox();
+  ok('tile figure stays on one line', stateBox.height < 32, `${Math.round(stateBox.height)}px tall`);
+
+  // The tap target should be comfortably large on a phone.
+  const box = await page.locator('.tile[data-task="clinic"]').boundingBox();
+  ok('tiles are a big target', box.height >= 140, `${Math.round(box.width)}x${Math.round(box.height)}`);
 
   await page.screenshot({ path: OUT + '/shot-summary.png', fullPage: true });
 

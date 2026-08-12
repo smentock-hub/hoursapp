@@ -23,7 +23,9 @@ other phone or tablet.
 
 ## How tracking works
 
-- Tap a tile to start it. Tapping the running tile stops it.
+- Tap a tile to start it. Tapping the running tile stops it. Each tile shows
+  that task's hours for the current week; a single strip below the grid gives
+  the week's total. There is no per-task bar chart — the tiles are the chart.
 - Only one task runs at a time: starting a new one **auto-stops** the previous
   one at the same instant, logged with source `auto-switch`.
 - A task left running for **6 hours** is auto-stopped with source `auto-safety`,
@@ -193,7 +195,7 @@ cd test && npm install
 # Run it in the project timezone — week boundaries are local-time.
 TZ=America/Los_Angeles npm run test:backend
 
-# frontend in a real browser against a mock backend (34 checks).
+# frontend in a real browser against a mock backend (41 checks).
 npm run serve &                  # serves ../web plus a stand-in /exec on :8099
 npm run test:ui                  # set CHROMIUM_PATH to reuse an existing browser
 ```
