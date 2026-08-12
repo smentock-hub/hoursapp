@@ -352,7 +352,6 @@ function logEvent(task, action, source, note) {
       // Nothing running and no task named: nothing to stop.
     }
 
-    rebuildWeekly_();
     return getSummary();
   } finally {
     lock.releaseLock();
@@ -386,7 +385,6 @@ function checkAutoStop() {
     }
     appendRow_(new Date(), stillActive.task, 'stop', 'auto-safety',
         AUTO_STOP_NOTE);
-    rebuildWeekly_();
   } finally {
     lock.releaseLock();
   }
@@ -433,10 +431,12 @@ function buildIntervals_() {
   var intervals = [];
   var flagged = [];
   var open = null;
+  var sumMs = 0;
 
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i].row;
     var when = rows[i].when;
+    sumMs += when.getTime();
     var action = String(row[C_ACTION] || '').toLowerCase();
     var task = String(row[C_TASK] || '').toLowerCase();
     var source = String(row[C_SOURCE] || '').toLowerCase();
@@ -461,7 +461,17 @@ function buildIntervals_() {
     }
   }
 
-  return { intervals: intervals, open: open, flagged: flagged };
+  // Cheap fingerprint of the log's shape: the row count catches insertions and
+  // deletions, the summed times catch an edit to any single row. Deleting rows
+  // does not fire onEdit, so this is what lets the Weekly tab notice.
+  var fingerprint = rows.length + ':' + sumMs;
+
+  return {
+    intervals: intervals,
+    open: open,
+    flagged: flagged,
+    fingerprint: fingerprint
+  };
 }
 
 function emptyTotals_() {
@@ -500,6 +510,8 @@ function getSummary() {
   var week = getWeekBounds(now);
   var parsed = buildIntervals_();
   var summed = totalsForWeek_(parsed, week, now);
+
+  syncWeekly_(parsed);
 
   var flagged = [];
   for (var i = 0; i < parsed.flagged.length; i++) {
@@ -614,6 +626,26 @@ function rebuildWeekly_() {
 }
 
 /**
+ * Rebuild the Weekly tab only when the log has actually changed since the last
+ * rebuild. Every read of the summary passes through here, so a change made in
+ * ways that fire no trigger — deleting rows, an import, an edit from another
+ * device — is picked up the next time the app refreshes.
+ *
+ * Rebuilding is a write, so gating it on the fingerprint is what keeps an
+ * ordinary 60-second refresh from writing to the sheet every time.
+ */
+function syncWeekly_(parsed) {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    if (props.getProperty('weeklyFingerprint') === parsed.fingerprint) return;
+    rebuildWeekly_();
+    props.setProperty('weeklyFingerprint', parsed.fingerprint);
+  } catch (err) {
+    // The rollup is a convenience; never fail a request over it.
+  }
+}
+
+/**
  * Simple trigger: keep the Weekly tab honest after a hand-correction in the
  * Log. Failures are swallowed so a bad edit can never block editing.
  */
@@ -622,6 +654,8 @@ function onEdit(e) {
     if (!e || !e.range) return;
     if (e.range.getSheet().getName() !== SHEET_NAME) return;
     rebuildWeekly_();
+    PropertiesService.getScriptProperties()
+        .setProperty('weeklyFingerprint', buildIntervals_().fingerprint);
   } catch (err) {
     // Nothing useful to do from a simple trigger.
   }

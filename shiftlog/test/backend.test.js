@@ -67,6 +67,7 @@ function makeEnv() {
     checkboxCells,
     getFormatRules: () => formatRules,
     getWeeklyGrid: () => weeklyGrid,
+    clearWeeklyGrid: () => { weeklyGrid = []; },
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (k) => (k in props ? props[k] : null),
@@ -424,6 +425,34 @@ env.rows.push(['', '2026-11-16', '11:00:00', 'inbox', 'start', 'manual', '', '']
 env.onEdit({ range: { getSheet: () => ({ getName: () => 'Weekly' }) } });
 check('edits to other tabs are ignored', env.getWeeklyGrid()[1][4], 1);
 check('a malformed event does not throw', env.onEdit({}), undefined);
+
+console.log('\n== deleted rows are picked up without any trigger ==');
+env.rows.length = 0;
+env.rows.push(['', '2026-11-23', '09:00:00', 'clinic', 'start', 'manual', '', '']);
+env.rows.push(['', '2026-11-23', '12:00:00', 'clinic', 'stop', 'manual', '', '']);
+at(local(2026, 11, 23, 13, 0));
+env.getSummary();                                   // builds Weekly
+check('Weekly shows the 3h', env.getWeeklyGrid()[1][1], 3);
+
+// Delete the rows the way the Sheets UI does — no onEdit fires for this.
+env.rows.length = 0;
+env.getSummary();
+check('Weekly self-heals to empty', env.getWeeklyGrid().length, 1);
+
+console.log('\n== an unchanged log does not rewrite the tab ==');
+env.rows.push(['', '2026-11-23', '09:00:00', 'lunch', 'start', 'manual', '', '']);
+env.rows.push(['', '2026-11-23', '10:00:00', 'lunch', 'stop', 'manual', '', '']);
+env.getSummary();
+check('rebuilt once for the new rows', env.getWeeklyGrid()[1][2], 1);
+env.clearWeeklyGrid();                              // if it rebuilds, we will see it
+env.getSummary();
+env.getSummary();
+check('repeat refreshes skip the write', env.getWeeklyGrid().length, 0);
+
+console.log('\n== editing a time in place is still noticed ==');
+env.rows[1][2] = '11:00:00';                        // 1h becomes 2h
+env.getSummary();
+check('edit triggers a rebuild', env.getWeeklyGrid()[1][2], 2);
 
 console.log('\n== doGet routing ==');
 env.rows.length = 0;

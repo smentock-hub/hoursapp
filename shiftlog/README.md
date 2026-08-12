@@ -79,9 +79,19 @@ row is reflected the next time it runs and the tab can never drift out of step
 with the log it summarises. Both it and the app's weekly figures come from the
 same pairing code, so the two cannot disagree.
 
-Rebuilds happen when the app records an event and, via an `onEdit` trigger,
-after you edit the Log by hand. A session running past Sunday midnight is split
-across the two weeks rather than counted wholly in one.
+Rebuilds are driven by a fingerprint of the log (row count plus the sum of all
+row times), checked on every summary read. Anything that changes the log is
+therefore picked up — including **deleting rows, which fires no trigger at all**
+— while an unchanged log costs no write, so an idle app refreshing every 60
+seconds never touches the sheet. An `onEdit` trigger additionally refreshes it
+immediately after a hand-edit.
+
+A session running past Sunday midnight is split across the two weeks rather than
+counted wholly in one.
+
+While a task is still running, its elapsed time lands in the current week's row
+as of the last rebuild; it settles exactly when you stop the task. Use the app
+for the live figure.
 
 Do not type into this tab — it is overwritten on every rebuild.
 
@@ -126,7 +136,7 @@ task as currently running.
 ```sh
 cd test && npm install
 
-# backend logic against a fake Sheets environment (97 checks).
+# backend logic against a fake Sheets environment (102 checks).
 # Run it in the project timezone — week boundaries are local-time.
 TZ=America/Los_Angeles npm run test:backend
 
