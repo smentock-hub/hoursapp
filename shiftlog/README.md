@@ -29,6 +29,11 @@ other phone or tablet.
   the day.
 - **End day** is the only control that stops the clock. It is disabled when
   nothing is running.
+- A stop only ever closes what is actually running. If the day is already ended,
+  a stop — a location trigger firing after you left, a stale tap — **records
+  nothing**, rather than leaving an orphan row that pairs with nothing and
+  counts as zero. The location automation can therefore never pad the totals;
+  it can only rescue a day you forgot to end.
 - A bar above the grid names the current task, and its tile is highlighted and
   marked "Current". There is no elapsed timer and no hours anywhere in the app:
   a clock that can drift or go stale invites corrections that log the wrong
@@ -197,7 +202,7 @@ task as currently running.
 ```sh
 cd test && npm install
 
-# backend logic against a fake Sheets environment (113 checks).
+# backend logic against a fake Sheets environment (116 checks).
 # Run it in the project timezone — week boundaries are local-time.
 TZ=America/Los_Angeles npm run test:backend
 

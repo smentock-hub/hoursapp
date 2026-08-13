@@ -199,6 +199,15 @@ const before = env.rows.length;
 at('2026-08-10T12:20:00-04:00'); env.logEvent('', 'stop', 'location', '');
 check('no junk row appended', env.rows.length, before);
 
+console.log('\n== a stop with nothing running never writes a row ==');
+// An orphan stop pairs with nothing, counts as zero, and misleads a reader.
+const beforeOrphan = env.rows.length;
+at('2026-08-10T12:25:00-04:00'); env.logEvent('notes', 'stop', 'button', '');
+check('naming a task does not conjure one to stop', env.rows.length, beforeOrphan);
+at('2026-08-10T12:26:00-04:00'); env.logEvent('', 'stop', 'leave-clinic', '');
+check('a late location trigger records nothing', env.rows.length, beforeOrphan);
+check('and the log still reports nothing active', env.getActiveTask(), null);
+
 console.log('\n== starting an already-active task does not double-log ==');
 at('2026-08-10T13:00:00-04:00'); env.logEvent('lunch', 'start', 'button', '');
 const n2 = env.rows.length;

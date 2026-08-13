@@ -409,11 +409,14 @@ function logEvent(task, action, source, note) {
       }
       appendRow_(now, task, 'start', source, note);
     } else {
-      var target = active ? active.task : task;
-      if (target) {
-        appendRow_(now, target, 'stop', source, note);
+      // A stop only ever closes what is actually running. Naming a task does
+      // not conjure one: writing a stop with nothing open leaves an orphan row
+      // that pairs with nothing, counts as zero, and misleads anyone reading
+      // the log. A stop arriving when the day is already ended — a location
+      // trigger firing after you left, a stale tap — records nothing.
+      if (active) {
+        appendRow_(now, active.task, 'stop', source, note);
       }
-      // Nothing running and no task named: nothing to stop.
     }
 
     return getSummary();
