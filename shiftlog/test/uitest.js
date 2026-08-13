@@ -147,6 +147,9 @@ function ok(label, cond, extra) {
   ok('marker link correct',
      urls[7] === BASE + '/exec?action=mark&source=leave-clinic&note=Left%20the%20clinic', urls[7]);
   ok('copy buttons present', await page.locator('.copy').count() === 8);
+  ok('settings shows the installed version',
+     /^\d{4}-\d{2}-\d{2}$/.test((await page.locator('#buildStamp').textContent()).trim()),
+     await page.locator('#buildStamp').textContent());
   await page.screenshot({ path: OUT + '/shot-settings.png', fullPage: true });
 
   // ---- offline queue ----

@@ -240,6 +240,13 @@ h1 {
 #weekProblem.show { display: block; }
 .problem-text { font-size: 14px; line-height: 1.5; color: var(--ink-soft); }
 #weekProblem .btn { margin-top: 14px; }
+.build {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 14px;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---------- settings sheet ---------- */
 
@@ -438,6 +445,7 @@ input:focus { border-color: var(--clinic); }
   <div id="linksList"></div>
 
   <button class="btn ghost" id="closeSheet" style="margin-top:24px">Done</button>
+  <div class="build">Version <span id="buildStamp"></span></div>
 </div>
 
 <div id="toast"></div>
@@ -461,6 +469,8 @@ input:focus { border-color: var(--clinic); }
   var LS_QUEUE = 'shiftlog.queue';
   var REFRESH_MS = 60000;
   var RETRY_MS = 20000;
+  var REQUEST_TIMEOUT_MS = 15000;   // Apps Script is slow, but never this slow.
+  var BUILD = '2026-08-13';         // shown in Settings, to confirm what is installed
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -550,7 +560,19 @@ input:focus { border-color: var(--clinic); }
   function call(params) {
     if (!scriptUrl) return Promise.reject(new Error('no-url'));
     inFlight++;
-    return fetch(buildUrl(params), { method: 'GET', redirect: 'follow' })
+
+    // A request that never settles would leave the app on "Checking what is
+    // running…" indefinitely, with nothing to tell you it had stalled. Abort it
+    // so a hang surfaces as a failure the UI can explain and retry from.
+    var controller = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      if (controller) controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+
+    var opts = { method: 'GET', redirect: 'follow' };
+    if (controller) opts.signal = controller.signal;
+
+    return fetch(buildUrl(params), opts)
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
@@ -559,7 +581,14 @@ input:focus { border-color: var(--clinic); }
         if (data && data.status === 'error') throw new Error(data.message || 'error');
         return data;
       })
-      .finally(function () { inFlight--; });
+      .catch(function (err) {
+        throw new Error(err && err.name === 'AbortError'
+          ? 'timed out' : String(err && err.message ? err.message : err));
+      })
+      .finally(function () {
+        clearTimeout(timer);
+        inFlight--;
+      });
   }
 
   function refresh() {
@@ -786,6 +815,7 @@ input:focus { border-color: var(--clinic); }
   /* ---------- boot ---------- */
 
   function init() {
+    $('buildStamp').textContent = BUILD;
     $('today').textContent = new Date().toLocaleDateString([], {
       weekday: 'long', month: 'long', day: 'numeric'
     });
