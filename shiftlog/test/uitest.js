@@ -75,9 +75,11 @@ function ok(label, cond, extra) {
   ok('no weekly table remains', await page.locator('[data-fill]').count() === 0);
   ok('no flagged card remains', await page.locator('#flaggedCard').count() === 0);
 
-  // The tap target should be comfortably large on a phone.
+  // The tap target should be comfortably large on a phone. 132px is well above
+  // the 108px the tiles started at; the rest of the budget goes to the marker
+  // buttons, which have to be reachable without scrolling.
   const box = await page.locator('.tile[data-task="clinic"]').boundingBox();
-  ok('tiles are a big target', box.height >= 140, `${Math.round(box.width)}x${Math.round(box.height)}`);
+  ok('tiles are a big target', box.height >= 130, `${Math.round(box.width)}x${Math.round(box.height)}`);
 
   await page.screenshot({ path: OUT + '/shot-summary.png', fullPage: true });
 
@@ -106,9 +108,14 @@ function ok(label, cond, extra) {
   const tileBgs = await page.locator('.tile').evaluateAll(
     (els) => els.map((e) => getComputedStyle(e).backgroundColor));
   ok('and shares no colour with any tile', !tileBgs.includes(endBg));
-  ok('the whole screen fits without scrolling',
+  ok('End day sits above the fold',
      endBox.y + endBox.height <= page.viewportSize().height,
      `${Math.round(endBox.y + endBox.height)} of ${page.viewportSize().height}`);
+  // Launched from the home screen there is no browser chrome, so the usable
+  // height is roughly 750. Every control must fit inside that, markers included.
+  const contentHeight = await page.evaluate(() => document.body.scrollHeight);
+  ok('all controls fit a standalone phone screen', contentHeight <= 720,
+     `${Math.round(contentHeight)}px of a ~750px budget`);
 
   await page.screenshot({ path: OUT + '/shot-running.png', fullPage: true });
 
@@ -135,18 +142,47 @@ function ok(label, cond, extra) {
   ok('no tile is marked after End day', await page.locator('.tile.active').count() === 0);
   ok('End day disables itself again', await page.locator('#endDayBtn').isDisabled());
 
+  // ---- timestamp markers ----
+  const beforeMarks = await (await fetch(BASE + '/__marks')).json();
+  const stateBefore = (await page.locator('#bannerWhat').textContent()).trim();
+
+  await page.locator('#arriveBtn').click();
+  await page.waitForTimeout(1500);
+  await page.locator('#leaveBtn').click();
+  await page.waitForTimeout(1500);
+
+  const marks = await (await fetch(BASE + '/__marks')).json();
+  ok('both markers reached the server', marks.length === beforeMarks.length + 2, marks.length);
+  ok('arrival carries its source and note',
+     marks[0].search.includes('source=arrive-hospital') &&
+     marks[0].search.includes('Arrived%20at%20hospital'), marks[0].search);
+  ok('departure carries its source and note',
+     marks[1].search.includes('source=leave-hospital') &&
+     marks[1].search.includes('Left%20the%20hospital'), marks[1].search);
+
+  // The whole point: a marker changes nothing about what is being timed.
+  ok('markers do not change the current task',
+     (await page.locator('#bannerWhat').textContent()).trim() === stateBefore, stateBefore);
+  ok('markers start no task', await page.locator('.tile.active').count() === 0);
+  ok('markers leave End day untouched', await page.locator('#endDayBtn').isDisabled());
+  ok('a confirmation is shown',
+     /recorded at/.test(await page.locator('#toast').textContent()),
+     await page.locator('#toast').textContent());
+
   // ---- settings + NFC links ----
   await page.locator('#gearBtn').click();
   await page.waitForTimeout(800);
   const urls = await page.locator('.link .lurl').allTextContents();
-  ok('eight links generated (6 tasks + end day + marker)', urls.length === 8, urls.length);
+  ok('nine links generated (6 tasks + end day + 2 markers)', urls.length === 9, urls.length);
   ok('clinic start link correct',
      urls[0] === BASE + '/exec?action=start&task=clinic&source=nfc', urls[0]);
   ok('end-day link correct',
      urls[6] === BASE + '/exec?action=stop&source=leave-clinic', urls[6]);
-  ok('marker link correct',
-     urls[7] === BASE + '/exec?action=mark&source=leave-clinic&note=Left%20the%20clinic', urls[7]);
-  ok('copy buttons present', await page.locator('.copy').count() === 8);
+  ok('arrive marker link correct',
+     urls[7] === BASE + '/exec?action=mark&source=arrive-hospital&note=Arrived%20at%20hospital', urls[7]);
+  ok('leave marker link correct',
+     urls[8] === BASE + '/exec?action=mark&source=leave-hospital&note=Left%20the%20hospital', urls[8]);
+  ok('copy buttons present', await page.locator('.copy').count() === 9);
   ok('settings shows the installed version',
      /^\d{4}-\d{2}-\d{2}$/.test((await page.locator('#buildStamp').textContent()).trim()),
      await page.locator('#buildStamp').textContent());
