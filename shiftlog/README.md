@@ -37,10 +37,10 @@ other phone or tablet.
   one at the same instant, logged with source `auto-switch`.
 - A task left running for **6 hours** is auto-stopped with source `auto-safety`,
   since the real stop was probably earlier and the logged time is likely an
-  overestimate. Such a row is **shaded amber in the sheet**, carries a
-  `Verified` checkbox, and is listed under "Needs review" in the app. Correct
-  its `Time`, then tick `Verified`: the shading clears and it drops out of the
-  app's review list. The hours themselves are never altered by ticking it.
+  overestimate. Such a row is **shaded amber in the sheet** and carries a
+  `Verified` checkbox. Correct its `Time`, then tick `Verified` and the shading
+  clears. The hours themselves are never altered by ticking it. This lives in
+  the sheet only — the app shows no hours and no review list.
 
   The shading is a conditional-format rule (`Source` is `auto-safety` and
   `Verified` is not `TRUE`), set up once, so it maintains itself without any
@@ -146,8 +146,7 @@ A session running past Sunday midnight is split across the two weeks rather than
 counted wholly in one.
 
 While a task is still running, its elapsed time lands in the current week's row
-as of the last rebuild; it settles exactly when you stop the task. Use the app
-for the live figure.
+as of the last rebuild; it settles exactly when you end the day.
 
 Do not type into this tab — it is overwritten on every rebuild.
 
