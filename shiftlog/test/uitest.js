@@ -98,6 +98,18 @@ function ok(label, cond, extra) {
      (await page.locator('.tile.active .state').textContent()).trim() === 'Current');
   ok('End day becomes available', !(await page.locator('#endDayBtn').isDisabled()));
 
+  // It must read as the one control that ends the day, not a seventh tile.
+  const endBox = await page.locator('#endDayBtn').boundingBox();
+  ok('End day is a tall target', endBox.height >= 60, `${Math.round(endBox.height)}px`);
+  const endBg = await page.locator('#endDayBtn').evaluate((e) => getComputedStyle(e).backgroundColor);
+  ok('End day is filled with the dark ink', endBg === 'rgb(69, 63, 73)', endBg);
+  const tileBgs = await page.locator('.tile').evaluateAll(
+    (els) => els.map((e) => getComputedStyle(e).backgroundColor));
+  ok('and shares no colour with any tile', !tileBgs.includes(endBg));
+  ok('the whole screen fits without scrolling',
+     endBox.y + endBox.height <= page.viewportSize().height,
+     `${Math.round(endBox.y + endBox.height)} of ${page.viewportSize().height}`);
+
   await page.screenshot({ path: OUT + '/shot-running.png', fullPage: true });
 
   // ---- switching tasks ----
