@@ -24,6 +24,11 @@ var C_NOTE = 6;
 var C_VERIFIED = 7;
 
 var SAFETY_SOURCE = 'auto-safety';
+
+// A standalone moment worth recording that is not part of timing anything —
+// leaving the building, say. Neither the pairing nor the active-task lookup
+// matches on it, so a marker can never alter an hours figure.
+var MARK_ACTION = 'mark';
 var FLAG_COLOR = '#F7E0C3';        // warm amber, in key with the app's palette
 
 // Bumped when the sheet's headers or formatting rules change, so an existing
@@ -381,7 +386,7 @@ function logEvent(task, action, source, note) {
   action = String(action || '').toLowerCase();
   task = String(task || '').toLowerCase();
 
-  if (action !== 'start' && action !== 'stop') {
+  if (action !== 'start' && action !== 'stop' && action !== MARK_ACTION) {
     return { status: 'error', message: 'Unknown action: ' + action };
   }
   if (action === 'start' && TASKS.indexOf(task) === -1) {
@@ -397,6 +402,12 @@ function logEvent(task, action, source, note) {
 
   try {
     var now = new Date();
+
+    if (action === MARK_ACTION) {
+      appendRow_(now, task, MARK_ACTION, source, note || 'Marker');
+      return getSummary();
+    }
+
     var active = getActiveTask();
 
     if (action === 'start') {

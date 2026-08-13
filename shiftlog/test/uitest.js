@@ -139,12 +139,14 @@ function ok(label, cond, extra) {
   await page.locator('#gearBtn').click();
   await page.waitForTimeout(800);
   const urls = await page.locator('.link .lurl').allTextContents();
-  ok('seven links generated (6 tasks + location stop)', urls.length === 7, urls.length);
+  ok('eight links generated (6 tasks + end day + marker)', urls.length === 8, urls.length);
   ok('clinic start link correct',
      urls[0] === BASE + '/exec?action=start&task=clinic&source=nfc', urls[0]);
-  ok('location stop link correct',
-     urls[6] === BASE + '/exec?action=stop&source=location', urls[6]);
-  ok('copy buttons present', await page.locator('.copy').count() === 7);
+  ok('end-day link correct',
+     urls[6] === BASE + '/exec?action=stop&source=leave-clinic', urls[6]);
+  ok('marker link correct',
+     urls[7] === BASE + '/exec?action=mark&source=leave-clinic&note=Left%20the%20clinic', urls[7]);
+  ok('copy buttons present', await page.locator('.copy').count() === 8);
   await page.screenshot({ path: OUT + '/shot-settings.png', fullPage: true });
 
   // ---- offline queue ----

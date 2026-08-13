@@ -226,6 +226,45 @@ check('flagged one entry', s.flagged.length, 1);
 check('flagged task', s.flagged[0].task, 'forms');
 check('forms = 7h', h(s.totals.forms), 7);
 
+console.log('\n== markers record a moment without touching any total ==');
+env.rows.length = 0;
+at(local(2026, 8, 10, 9, 0));  env.logEvent('clinic', 'start', 'button', '');
+at(local(2026, 8, 10, 17, 0)); env.logEvent('', 'stop', 'end-day', '');
+at(local(2026, 8, 10, 17, 30));
+const beforeMark = j(env.getSummary());
+
+at(local(2026, 8, 10, 17, 20));
+env.logEvent('', 'mark', 'leave-clinic', 'Left the clinic');
+const markRow = env.rows[env.rows.length - 1];
+check('a row is written', markRow[4], 'mark');
+check('carrying the source', markRow[5], 'leave-clinic');
+check('and the note', markRow[6], 'Left the clinic');
+
+at(local(2026, 8, 10, 17, 30));
+const afterMark = j(env.getSummary());
+check('totals are untouched', afterMark.totals, beforeMark.totals);
+check('total hours untouched', afterMark.totalHours, beforeMark.totalHours);
+
+console.log('\n== a marker mid-session does not interrupt timing ==');
+env.rows.length = 0;
+at(local(2026, 8, 10, 9, 0));  env.logEvent('clinic', 'start', 'button', '');
+at(local(2026, 8, 10, 10, 0)); env.logEvent('', 'mark', 'leave-clinic', 'Stepped out');
+check('clinic is still running', env.getActiveTask().task, 'clinic');
+at(local(2026, 8, 10, 11, 0)); env.logEvent('', 'stop', 'end-day', '');
+check('the session spans the marker', h(env.getSummary().totals.clinic), 2);
+
+console.log('\n== a marker works when nothing is running ==');
+env.rows.length = 0;
+at(local(2026, 8, 10, 19, 0));
+env.logEvent('', 'mark', 'leave-clinic', 'Left the clinic');
+check('recorded even with no open task', env.rows.length, 1);
+check('nothing appears active', env.getActiveTask(), null);
+check('no hours conjured', h(env.getSummary().totalHours), 0);
+
+console.log('\n== the Weekly tab ignores markers ==');
+env.rebuildWeekly_();
+check('no week row from a marker alone', env.getWeeklyGrid().length, 1);
+
 console.log('\n== week bounds: Mon 00:00 -> Sun 23:59 ==');
 // Bounds are local-time, so compare local components (not the UTC ISO string).
 const localDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

@@ -74,6 +74,20 @@ Links follow this shape:
 `source` is recorded in the sheet, so you can tell later which entries came from
 a tag, a location trigger, a tap in the app, or an automatic stop.
 
+## Markers
+
+`action=mark` records a moment that is not part of timing anything — leaving the
+building, say:
+
+```
+{exec}?action=mark&source=leave-clinic&note=Left%20the%20clinic
+```
+
+Neither the start/stop pairing nor the active-task lookup matches on `mark`, so
+a marker **cannot alter an hours figure**, does not interrupt a running task,
+and works whether or not something is running. It is simply a timestamped row
+you can sort or filter on later. `note` is free text and becomes the row's Note.
+
 ## iPhone Shortcuts
 
 `source` is free text, so give each trigger its own label (`shortcut`,
@@ -202,11 +216,11 @@ task as currently running.
 ```sh
 cd test && npm install
 
-# backend logic against a fake Sheets environment (116 checks).
+# backend logic against a fake Sheets environment (127 checks).
 # Run it in the project timezone — week boundaries are local-time.
 TZ=America/Los_Angeles npm run test:backend
 
-# frontend in a real browser against a mock backend (40 checks).
+# frontend in a real browser against a mock backend (45 checks).
 npm run serve &                  # serves ../web plus a stand-in /exec on :8099
 npm run test:ui                  # set CHROMIUM_PATH to reuse an existing browser
 ```

@@ -697,9 +697,15 @@ input:focus { border-color: var(--clinic); }
       };
     });
     rows.push({
-      name: 'Stop (location)',
+      name: 'End day (location)',
       color: '#948C97',
-      url: scriptUrl + '?action=stop&source=location'
+      url: scriptUrl + '?action=stop&source=leave-clinic'
+    });
+    // Records the moment without touching any total.
+    rows.push({
+      name: 'Left the building (marker)',
+      color: '#948C97',
+      url: scriptUrl + '?action=mark&source=leave-clinic&note=Left%20the%20clinic'
     });
     return rows;
   }
