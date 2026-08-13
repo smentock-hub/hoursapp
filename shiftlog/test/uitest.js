@@ -26,7 +26,7 @@ function ok(label, cond, extra) {
 
   await ctx.addInitScript((url) => localStorage.setItem('shiftlog.url', url), BASE + '/exec');
 
-  // ---- fresh install: no URL saved -> settings sheet opens itself ----
+  // ---- fresh install: no URL saved ----
   const fresh = await browser.newContext({ ...devices['iPhone 13'] });
   const fp = await fresh.newPage();
   await fp.goto(BASE + '/index.html');
@@ -36,13 +36,14 @@ function ok(label, cond, extra) {
   ok('unconfigured banner points at the gear',
      (await fp.locator('#bannerWhat').textContent()).trim() === 'Not connected',
      (await fp.locator('#bannerWhat').textContent()).trim());
-  ok('and says how to fix it',
-     (await fp.locator('#bannerSince').textContent()).includes('gear'));
-  ok('weekly card explains itself instead of drawing a zero week',
+  ok('and the notice says how to fix it',
+     (await fp.locator('#weekProblemText').textContent()).includes('Web App URL'));
+  ok('a notice explains the disconnection',
      await fp.locator('#weekProblem.show').count() === 1);
-  ok('the zero bars are hidden', await fp.locator('#weekBody.hide').count() === 1);
   ok('with a button into settings',
      await fp.locator('#weekProblemBtn').isVisible());
+  ok('End day is disabled while disconnected',
+     await fp.locator('#endDayBtn').isDisabled());
   await fp.locator('#gearBtn').click();
   await fp.waitForTimeout(700);
   ok('gear still opens settings on demand',
@@ -50,7 +51,7 @@ function ok(label, cond, extra) {
   await fp.screenshot({ path: OUT + '/shot-firstrun.png', fullPage: true });
   await fresh.close();
 
-  // ---- seeded weekly data ----
+  // ---- connected ----
   await page.goto(BASE + '/__reset');
   await page.goto(BASE + '/__seed');
   await page.goto(BASE + '/index.html', { waitUntil: 'networkidle' });
@@ -62,27 +63,17 @@ function ok(label, cond, extra) {
      'Clinic,Lunch,Notes,Inbox,Forms,Meeting');
   ok('header shows today', /\w+day/.test(await page.locator('#today').textContent()),
      await page.locator('#today').textContent());
-  ok('week label says Mon–Sun',
-     (await page.locator('#weekRange').textContent()).includes('Mon–Sun'),
-     await page.locator('#weekRange').textContent());
-  ok('idle banner', (await page.locator('#bannerWhat').textContent()).trim() === 'Nothing running');
-  ok('total hours rendered', (await page.locator('#totalHours').textContent()).trim() === '24h 06m',
-     await page.locator('#totalHours').textContent());
-  ok('connected: the total is shown', await page.locator('#weekBody.hide').count() === 0);
+  ok('idle current-task bar reads None',
+     (await page.locator('#bannerWhat').textContent()).trim() === 'None');
   ok('connected: no problem notice', await page.locator('#weekProblem.show').count() === 0);
-  ok('flagged card visible when entries exist',
-     await page.locator('#flaggedCard.show').count() === 1);
-  ok('flagged mentions review',
-     (await page.locator('#flaggedCard .sub').textContent()).includes('overestimate'));
+  ok('End day disabled when nothing is running',
+     await page.locator('#endDayBtn').isDisabled());
 
-  ok('no weekly bar table remains', await page.locator('[data-fill]').count() === 0);
-  const tileTexts = await page.locator('.tile .state').allTextContents();
-  ok('every tile carries its own weekly hours',
-     tileTexts.filter((t) => /^\d+h \d{2}m$/.test(t.trim())).length === 6,
-     tileTexts.join(' / '));
-  // Wrapping to a second line was why the label was trimmed to the figure.
-  const stateBox = await page.locator('.tile[data-task="lunch"] .state').boundingBox();
-  ok('tile figure stays on one line', stateBox.height < 32, `${Math.round(stateBox.height)}px tall`);
+  // No hours anywhere in the app: that lives in the sheet now.
+  const body = await page.locator('body').innerText();
+  ok('no hours shown anywhere', !/\d+h \d{2}m/.test(body), body.replace(/\n/g, ' | ').slice(0, 120));
+  ok('no weekly table remains', await page.locator('[data-fill]').count() === 0);
+  ok('no flagged card remains', await page.locator('#flaggedCard').count() === 0);
 
   // The tap target should be comfortably large on a phone.
   const box = await page.locator('.tile[data-task="clinic"]').boundingBox();
@@ -102,13 +93,10 @@ function ok(label, cond, extra) {
   ok('banner has pulsing state class', await page.locator('#banner.running').count() === 1);
   ok('breathing ring on exactly one tile', await page.locator('.tile.active').count() === 1);
 
-  const t1 = await page.locator('#bannerElapsed').textContent();
-  await page.waitForTimeout(2500);
-  const t2 = await page.locator('#bannerElapsed').textContent();
-  ok('live timer advances', t1 !== t2, `${t1} -> ${t2}`);
-  ok('timer format M:SS', /^\d+:\d{2}$/.test(t2.trim()), t2);
-  ok('tile shows same timer',
-     (await page.locator('.tile.active .state').textContent()).trim() === t2.trim());
+  ok('no timer is displayed', await page.locator('#bannerElapsed').count() === 0);
+  ok('the selected tile is marked Current',
+     (await page.locator('.tile.active .state').textContent()).trim() === 'Current');
+  ok('End day becomes available', !(await page.locator('#endDayBtn').isDisabled()));
 
   await page.screenshot({ path: OUT + '/shot-running.png', fullPage: true });
 
@@ -119,12 +107,21 @@ function ok(label, cond, extra) {
      await page.locator('.tile[data-task="notes"].active').count() === 1 &&
      await page.locator('.tile[data-task="clinic"].active').count() === 0);
 
-  // ---- tap active tile to stop ----
+  // ---- re-tapping the current tile must NOT stop it ----
   await page.locator('.tile[data-task="notes"]').click();
   await page.waitForTimeout(1800);
-  ok('stop clears the banner',
-     (await page.locator('#bannerWhat').textContent()).trim() === 'Nothing running');
-  ok('no active tiles after stop', await page.locator('.tile.active').count() === 0);
+  ok('re-tapping the current task keeps it running',
+     (await page.locator('#bannerWhat').textContent()).trim() === 'Notes');
+  ok('and it is still the marked tile',
+     await page.locator('.tile[data-task="notes"].active').count() === 1);
+
+  // ---- End day is the only way to stop ----
+  await page.locator('#endDayBtn').click();
+  await page.waitForTimeout(1800);
+  ok('End day clears the current task',
+     (await page.locator('#bannerWhat').textContent()).trim() === 'None');
+  ok('no tile is marked after End day', await page.locator('.tile.active').count() === 0);
+  ok('End day disables itself again', await page.locator('#endDayBtn').isDisabled());
 
   // ---- settings + NFC links ----
   await page.locator('#gearBtn').click();

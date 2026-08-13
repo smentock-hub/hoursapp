@@ -46,7 +46,7 @@ html, body {
 }
 
 body {
-  padding: 0 16px calc(40px + env(safe-area-inset-bottom));
+  padding: 0 16px calc(20px + env(safe-area-inset-bottom));
   max-width: 560px;
   margin: 0 auto;
 }
@@ -59,7 +59,7 @@ header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: calc(18px + env(safe-area-inset-top)) 4px 14px;
+  padding: calc(12px + env(safe-area-inset-top)) 4px 12px;
 }
 header .titles { flex: 1; min-width: 0; }
 h1 {
@@ -94,8 +94,8 @@ h1 {
   background: var(--card);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 14px 18px;
-  margin-bottom: 16px;
+  padding: 12px 18px;
+  margin-bottom: 14px;
 }
 .dot {
   width: 11px; height: 11px;
@@ -121,40 +121,41 @@ h1 {
 }
 .banner .label { flex: 1; min-width: 0; }
 .banner .what {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.banner .since { font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
-.banner .elapsed {
-  font-size: 20px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-size: 21px;
+  font-weight: 650;
   letter-spacing: -0.02em;
   color: var(--accent, var(--ink));
+  margin-top: 1px;
 }
-.banner:not(.running) .elapsed { display: none; }
+.banner .since {
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 600;
+}
 
 /* ---------- task grid ---------- */
 
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 .tile {
   position: relative;
   border-radius: var(--radius);
   background: var(--c);
   color: #fff;
-  min-height: 148px;
-  padding: 20px;
+  min-height: 140px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: center;
   text-align: left;
+  opacity: .78;
   box-shadow: var(--shadow);
   transition: transform .12s ease, filter .12s ease;
   overflow: hidden;
@@ -165,18 +166,17 @@ h1 {
   font-weight: 600;
   letter-spacing: -0.015em;
 }
+/* The selected tile is the one thing that must read at a glance. */
+.tile.active { opacity: 1; }
 .tile .state {
-  font-size: 17px;
-  opacity: .85;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.tile.active .state {
-  font-size: 26px;
+  font-size: 12px;
   font-weight: 650;
-  opacity: 1;
-  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-top: 6px;
+  opacity: 0;
 }
+.tile.active .state { opacity: .95; }
 /* "breathing" inset ring on the running tile */
 .tile.active::after {
   content: "";
@@ -209,49 +209,29 @@ h1 {
 }
 .card .sub { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
 
-.weektotal {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px;
-}
-.wt-label { display: flex; flex-direction: column; min-width: 0; }
-.wt-label > span:first-child { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
-.wt-range { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
-.wt-value {
-  font-size: 22px;
+.endday {
+  display: block;
+  width: 100%;
+  padding: 15px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: 17px;
   font-weight: 650;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  flex: none;
+  letter-spacing: -0.01em;
+  text-align: center;
+  margin-bottom: 16px;
+  transition: transform .12s ease, opacity .12s ease;
 }
+.endday:active { transform: scale(.98); }
+.endday[disabled] { opacity: .45; }
 
-/* Shown instead of the total when there is nothing trustworthy to show. */
+/* Shown when the app cannot be trusted to know the current task. */
 #weekProblem { display: none; }
 #weekProblem.show { display: block; }
 .problem-text { font-size: 14px; line-height: 1.5; color: var(--ink-soft); }
 #weekProblem .btn { margin-top: 14px; }
-#weekBody.hide { display: none; }
-
-#flaggedCard { display: none; }
-#flaggedCard.show { display: block; }
-.flag {
-  display: flex;
-  gap: 10px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 13px;
-}
-.flag:last-child { border-bottom: 0; padding-bottom: 0; }
-.flag .chip {
-  flex: none;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--c);
-  margin-top: 6px;
-}
-.flag .when { color: var(--ink-soft); font-size: 12px; margin-top: 2px; }
 
 /* ---------- settings sheet ---------- */
 
@@ -418,36 +398,19 @@ input:focus { border-color: var(--clinic); }
 <div class="banner" id="banner">
   <div class="dot"></div>
   <div class="label">
-    <div class="what" id="bannerWhat">Nothing running</div>
-    <div class="since" id="bannerSince"></div>
+    <div class="since">Current task</div>
+    <div class="what" id="bannerWhat">None</div>
   </div>
-  <div class="elapsed" id="bannerElapsed">0:00</div>
 </div>
 
 <div class="grid" id="grid"></div>
-
-<div class="card weektotal" id="weekBody">
-  <div class="wt-label">
-    <span>This week</span>
-    <span class="wt-range" id="weekRange">Mon–Sun</span>
-  </div>
-  <span class="wt-value" id="totalHours">0h 00m</span>
-</div>
 
 <div class="card" id="weekProblem">
   <div class="problem-text" id="weekProblemText"></div>
   <button class="btn" id="weekProblemBtn">Open settings</button>
 </div>
 
-<div class="card" id="flaggedCard">
-  <h2>Needs review</h2>
-  <div class="sub">
-    These were auto-stopped after 6 hours, so the logged time may be an
-    overestimate — please review. They are shaded amber in the sheet; correct
-    the Time, then tick <b>Verified</b> to clear them from here.
-  </div>
-  <div id="flaggedList"></div>
-</div>
+<button class="endday" id="endDayBtn">End day</button>
 
 <div class="scrim" id="scrim"></div>
 
@@ -494,8 +457,7 @@ input:focus { border-color: var(--clinic); }
   var $ = function (id) { return document.getElementById(id); };
 
   var scriptUrl = localStorage.getItem(LS_URL) || '';
-  var state = { active: null, totals: {}, totalHours: 0, flagged: [],
-                weekStart: null, weekEnd: null };
+  var state = { active: null };
   var inFlight = 0;
   var loadedOnce = false;      // has a summary ever arrived from the server?
   var lastError = null;
@@ -503,25 +465,6 @@ input:focus { border-color: var(--clinic); }
   /* ---------- formatting ---------- */
 
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
-
-  // Live timer: M:SS under an hour, H:MM:SS above it.
-  function clock(ms) {
-    var s = Math.max(0, Math.floor(ms / 1000));
-    var h = Math.floor(s / 3600);
-    var m = Math.floor((s % 3600) / 60);
-    var sec = s % 60;
-    return h > 0 ? h + ':' + pad(m) + ':' + pad(sec) : m + ':' + pad(sec);
-  }
-
-  // Totals: "3h 12m".
-  function hoursLabel(hours) {
-    var total = Math.round((hours || 0) * 60);
-    return Math.floor(total / 60) + 'h ' + pad(total % 60) + 'm';
-  }
-
-  function timeOfDay(date) {
-    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  }
 
   function toast(msg) {
     var el = $('toast');
@@ -540,33 +483,28 @@ input:focus { border-color: var(--clinic); }
       b.className = 'tile';
       b.style.setProperty('--c', t.color);
       b.dataset.task = t.id;
-      b.innerHTML = '<div class="name"></div><div class="state"></div>';
+      b.innerHTML = '<div class="name"></div><div class="state">Current</div>';
       b.querySelector('.name').textContent = t.name;
       b.addEventListener('click', function () { onTileTap(t.id); });
       grid.appendChild(b);
     });
   }
 
+  // Says only which task is current — no clock. A timer that can drift or go
+  // stale invites corrections that log the wrong thing.
   function renderBanner() {
     var banner = $('banner');
     if (!state.active) {
       banner.classList.remove('running');
       banner.style.removeProperty('--accent');
-      if (!scriptUrl) {
-        $('bannerWhat').textContent = 'Not connected';
-        $('bannerSince').textContent = 'Tap the gear to add your Web App URL';
-      } else {
-        $('bannerWhat').textContent = 'Nothing running';
-        $('bannerSince').textContent = '';
-      }
+      $('bannerWhat').textContent =
+        !scriptUrl ? 'Not connected' : (loadedOnce ? 'None' : '…');
       return;
     }
     var t = BY_ID[state.active.task];
-    var started = new Date(state.active.startTime);
     banner.classList.add('running');
     banner.style.setProperty('--accent', t ? t.color : '#6D8CA3');
-    $('bannerWhat').textContent = (t ? t.name : state.active.task) + ' — running';
-    $('bannerSince').textContent = 'Started ' + timeOfDay(started);
+    $('bannerWhat').textContent = t ? t.name : state.active.task;
   }
 
   function renderTiles() {
@@ -574,67 +512,14 @@ input:focus { border-color: var(--clinic); }
     Array.prototype.forEach.call(document.querySelectorAll('.tile'), function (tile) {
       var isActive = tile.dataset.task === activeId;
       tile.classList.toggle('active', isActive);
-      if (!isActive) {
-        // Just the figure: the strip below the grid names the period, and
-        // "Nh NNm this week" wraps to two lines at this tile size.
-        tile.querySelector('.state').textContent =
-          hoursLabel(state.totals[tile.dataset.task] || 0);
-      }
-    });
-  }
 
-  // Runs once a second: the two live timers.
-  function tick() {
-    if (!state.active) return;
-    var ms = Date.now() - new Date(state.active.startTime).getTime();
-    var text = clock(ms);
-    $('bannerElapsed').textContent = text;
-    var tile = document.querySelector('.tile.active .state');
-    if (tile) tile.textContent = text;
-  }
-
-  // Per-task hours live on the tiles; only the week's total needs a home here.
-  function renderSummary() {
-    $('totalHours').textContent = hoursLabel(state.totalHours);
-
-    if (state.weekStart && state.weekEnd) {
-      var opts = { month: 'short', day: 'numeric' };
-      $('weekRange').textContent = 'Mon–Sun · ' +
-        new Date(state.weekStart).toLocaleDateString([], opts) + ' – ' +
-        new Date(state.weekEnd).toLocaleDateString([], opts);
-    }
-  }
-
-  function renderFlagged() {
-    var card = $('flaggedCard');
-    var list = $('flaggedList');
-    var items = state.flagged || [];
-    card.classList.toggle('show', items.length > 0);
-    list.innerHTML = '';
-    items.forEach(function (f) {
-      var t = BY_ID[f.task];
-      var when = new Date(f.time);
-      var el = document.createElement('div');
-      el.className = 'flag';
-      el.style.setProperty('--c', t ? t.color : '#948C97');
-      el.innerHTML = '<span class="chip"></span><div><div class="ftext"></div>' +
-                     '<div class="when"></div></div>';
-      el.querySelector('.ftext').textContent =
-        (t ? t.name : f.task) + ' — ' + (f.note || 'Auto-stopped after 6h.');
-      el.querySelector('.when').textContent =
-        when.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) +
-        ' at ' + timeOfDay(when);
-      list.appendChild(el);
     });
   }
 
   function renderAll() {
     renderBanner();
     renderTiles();
-    renderSummary();
-    renderFlagged();
     renderConnection();
-    tick();
   }
 
   /* ---------- server sync ---------- */
@@ -642,11 +527,6 @@ input:focus { border-color: var(--clinic); }
   function apply(data) {
     if (!data || data.status !== 'ok') return false;
     state.active = data.active || null;
-    state.totals = data.totals || {};
-    state.totalHours = data.totalHours || 0;
-    state.flagged = data.flagged || [];
-    state.weekStart = data.weekStart;
-    state.weekEnd = data.weekEnd;
     renderAll();
     return true;
   }
@@ -678,10 +558,10 @@ input:focus { border-color: var(--clinic); }
     if (!scriptUrl) { renderConnection(); return Promise.resolve(); }
     return call({ summary: 1 })
       .then(function (data) {
-        apply(data);
+        // Flags first: apply() renders, and the banner reads them.
         loadedOnce = true;
         lastError = null;
-        renderConnection();
+        apply(data);
       })
       .catch(function (err) {
         // Zeros drawn as if they were real is the worst outcome; say so instead.
@@ -698,16 +578,16 @@ input:focus { border-color: var(--clinic); }
     var problem = null;
     if (!scriptUrl) {
       problem = 'Not connected to your sheet yet. Add the Google Apps Script ' +
-                'Web App URL and your hours will appear here.';
+                'Web App URL to start logging.';
     } else if (!loadedOnce) {
       problem = lastError
-        ? 'Could not reach your sheet, so this week’s hours are not shown ' +
-          'yet. Check the URL in settings — retrying automatically.'
-        : 'Loading this week’s hours…';
+        ? 'Could not reach your sheet, so the current task shown above may be ' +
+          'out of date. Check the URL in settings — retrying automatically.'
+        : 'Checking what is running…';
     }
 
+    $('endDayBtn').disabled = !scriptUrl || !loadedOnce || !state.active;
     $('weekProblem').classList.toggle('show', problem !== null);
-    $('weekBody').classList.toggle('hide', problem !== null);
     $('weekProblemBtn').style.display =
         (problem && (!scriptUrl || lastError)) ? 'block' : 'none';
     if (problem) $('weekProblemText').textContent = problem;
@@ -754,14 +634,29 @@ input:focus { border-color: var(--clinic); }
       toast('Add your Web App URL first');
       return;
     }
-    var isActive = state.active && state.active.task === taskId;
-    var params = isActive
-      ? { task: taskId, action: 'stop', source: 'button' }
-      : { task: taskId, action: 'start', source: 'button' };
+    // Always a start. Tapping the current task re-asserts it rather than
+    // stopping, so a tap made because the display looked wrong cannot silently
+    // end the day. Stopping is the End day button's job alone.
+    var params = { task: taskId, action: 'start', source: 'button' };
 
     // Optimistic: flip the UI now, reconcile with the server's answer after.
-    state.active = isActive ? null
-                            : { task: taskId, startTime: new Date().toISOString() };
+    state.active = { task: taskId, startTime: new Date().toISOString() };
+    renderAll();
+
+    call(params)
+      .then(apply)
+      .catch(function (err) {
+        if (String(err.message) === 'no-url') return;
+        enqueue(params);
+      });
+  }
+
+  function endDay() {
+    if (!scriptUrl) { openSheet(); toast('Add your Web App URL first'); return; }
+    if (!state.active) { toast('Nothing is running'); return; }
+
+    var params = { action: 'stop', source: 'end-day' };
+    state.active = null;
     renderAll();
 
     call(params)
@@ -887,11 +782,11 @@ input:focus { border-color: var(--clinic); }
 
     $('gearBtn').addEventListener('click', openSheet);
     $('weekProblemBtn').addEventListener('click', openSheet);
+    $('endDayBtn').addEventListener('click', endDay);
     $('scrim').addEventListener('click', closeSheet);
     $('closeSheet').addEventListener('click', closeSheet);
     $('saveUrl').addEventListener('click', saveUrl);
 
-    setInterval(tick, 1000);
     setInterval(function () { if (inFlight === 0) refresh(); }, REFRESH_MS);
     setInterval(flushQueue, RETRY_MS);
     window.addEventListener('online', function () {
